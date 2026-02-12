@@ -55,6 +55,15 @@ python scripts/imports/jsonl_import.py data/entities.jsonl --auto-cleanup
 python scripts/imports/jsonl_import.py data/entities.jsonl \
   --log-file logs/my_import.log \
   --log-level DEBUG
+
+# Import specific line range
+python scripts/imports/jsonl_import.py data/entities.jsonl \
+  --from 1000 \
+  --to 2000
+
+# Import from line 1000 to end
+python scripts/imports/jsonl_import.py data/entities.jsonl \
+  --from 1000
 ```
 
 ## Command-Line Options
@@ -70,6 +79,8 @@ python scripts/imports/jsonl_import.py data/entities.jsonl \
 | `--auto-cleanup` | False | Automatically delete database (no prompt) |
 | `--log-file` | `logs/import_YYYY-MM-DD_HH-MM-SS.log` | Path to log file |
 | `--log-level` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
+| `--from-line, --from` | None | Start importing from line number (1-indexed) |
+| `--to-line, --to` | None | Stop importing at line number (1-indexed) |
 
 ## JSONL Format
 
