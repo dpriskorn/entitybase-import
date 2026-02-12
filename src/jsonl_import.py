@@ -168,6 +168,7 @@ async def import_entity(
         start_time = time.time()
         try:
             logger.debug(f"Attempt {attempt + 1}/{MAX_RETRIES} for {entity_id}")
+            logger.debug(f"Sending data to API: {json.dumps(entity_data, indent=2)}")
 
             response = await session.post(
                 f"{API_BASE_URL}/import",
@@ -248,7 +249,9 @@ async def import_from_jsonl(
     cleanup: bool = False,
     auto_cleanup: bool = False,
     log_file: Optional[str] = None,
-    log_level: str = "INFO"
+    log_level: str = "INFO",
+    from_line: Optional[int] = None,
+    to_line: Optional[int] = None
 ):
     """Import entities from JSONL file.
 
@@ -262,6 +265,8 @@ async def import_from_jsonl(
         auto_cleanup: Automatically delete database after import completes (no prompt)
         log_file: Path to log file (default: logs/import_YYYY-MM-DD_HH-MM-SS.log)
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
+        from_line: Start importing from line number (1-indexed)
+        to_line: Stop importing at line number (1-indexed)
     """
     run_id_for_log = 0
 
@@ -327,6 +332,10 @@ async def import_from_jsonl(
     entities = []
     with open(jsonl_path, 'r') as f:
         for line_num, line in enumerate(f, 1):
+            if from_line and line_num < from_line:
+                continue
+            if to_line and line_num > to_line:
+                break
             line = line.strip()
             if not line:
                 continue
@@ -336,6 +345,8 @@ async def import_from_jsonl(
             entities.append((line_num, entity))
 
     print(f"Parsed {len(entities):,} entities from file")
+    if from_line or to_line:
+        print(f"Line range: {from_line or 1} - {to_line or 'end'}")
 
     state_manager = ImportStateManager(db_path)
     run_id = state_manager.create_run(
@@ -467,6 +478,23 @@ def main():
         action='store_true',
         help='Automatically delete database after import completes (no prompt)'
     )
+    parser.add_argument(
+        '--log-level',
+        type=str,
+        default='INFO',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+        help='Logging level (default: INFO)'
+    )
+    parser.add_argument(
+        '--from-line',
+        type=int,
+        help='Start importing from line number (1-indexed)'
+    )
+    parser.add_argument(
+        '--to-line',
+        type=int,
+        help='Stop importing at line number (1-indexed)'
+    )
 
     args = parser.parse_args()
 
@@ -477,7 +505,10 @@ def main():
         api_url=args.api_url,
         db_path=args.db_path,
         cleanup=args.cleanup,
-        auto_cleanup=args.auto_cleanup
+        auto_cleanup=args.auto_cleanup,
+        log_level=args.log_level,
+        from_line=args.from_line,
+        to_line=args.to_line
     ))
 
 
