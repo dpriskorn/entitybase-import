@@ -486,12 +486,14 @@ def main():
         help='Logging level (default: INFO)'
     )
     parser.add_argument(
-        '--from-line',
+        '--from-line', '--from',
+        dest='from_line',
         type=int,
         help='Start importing from line number (1-indexed)'
     )
     parser.add_argument(
-        '--to-line',
+        '--to-line', '--to',
+        dest='to_line',
         type=int,
         help='Stop importing at line number (1-indexed)'
     )
