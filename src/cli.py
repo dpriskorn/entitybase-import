@@ -317,6 +317,7 @@ def main():
     import_parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], help='Logging level')
     import_parser.add_argument('--from', dest='from_line', type=int, help='Start from line number (1-indexed)')
     import_parser.add_argument('--to', dest='to_line', type=int, help='Stop at line number (1-indexed)')
+    import_parser.add_argument('--help', action='store_true', help='Show help message')
 
     subparsers.add_parser('status', help='Show current import status')
 
