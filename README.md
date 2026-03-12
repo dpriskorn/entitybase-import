@@ -2,6 +2,42 @@
 
 A command-line tool for importing entities into the EntityBase API from JSONL files.
 
+## Architecture
+
+```mermaid
+flowchart TD
+    subgraph Input
+        JSONL[("JSONL File")]
+    end
+
+    subgraph Core
+        IMP[("jsonl_import.py")]
+        SM[("state_manager.py")]
+        API[("EntityBase API")]
+    end
+
+    subgraph Storage
+        DB[(("import_state.db"))]
+    end
+
+    subgraph CLI
+        CLI[("cli.py")]
+    end
+
+    JSONL --> IMP
+    IMP --> SM
+    SM <--> DB
+    IMP --> API
+    CLI --> DB
+
+    style JSONL fill:#f9f,stroke:#333
+    style IMP fill:#bbf,stroke:#333
+    style SM fill:#bfb,stroke:#333
+    style API fill:#fbb,stroke:#333
+    style DB fill:#ffd,stroke:#333
+    style CLI fill:#bff,stroke:#333
+```
+
 ## Features
 
 - **Parallel Processing**: Configurable concurrency for faster imports
@@ -18,19 +54,17 @@ A command-line tool for importing entities into the EntityBase API from JSONL fi
 git clone <repository-url>
 cd entitybase-import
 
-# Setup venv or uv
-...
+# Setup virtual environment and install dependencies
+make setup
 
-# Install dependencies (if using Poetry)
-poetry install
-
-# Or using pip
-pip install -r requirements.txt
+# Or step by step:
+make venv          # Create virtual environment
+make install       # Install package
 ```
 
 ## Requirements
 
-- Python >= 3.13
+- Python >= 3.14
 - Running EntityBase API instance
 - SQLite3 (for state management)
 
@@ -101,10 +135,33 @@ The import tool uses SQLite to track import state:
 - **Skipped**: Already exists in the database (409 Conflict)
 - **Failed**: Import failed with error details
 
-Use the CLI to view statistics:
+Use the CLI to manage state:
 
 ```bash
-python scripts/imports/cli.py status
+python src/cli.py help                  # Show all commands
+python src/cli.py status                 # Show current import status
+python src/cli.py stats                  # Show overall statistics
+python src/cli.py list --status failed   # List failed entities
+python src/cli.py runs                   # List all import runs
+python src/cli.py reset                  # Reset all state (prompts confirmation)
+python src/cli.py reset --run-id 1       # Reset specific run
+```
+
+## Development
+
+```bash
+# Setup development environment
+make setup                    # Create venv and install with dev dependencies
+make clean                    # Remove venv and cache files
+
+# Development commands
+make install                  # Install package
+make lint                     # Run ruff linter
+make test                     # Run tests (includes lint first)
+make typecheck                # Run mypy type checker
+
+# Quick reference
+make venv                     # Show virtual environment info
 ```
 
 ## Logging
@@ -119,19 +176,6 @@ Logs are written to both console and file:
   - Timing information
 
 Log files are rotated automatically when they exceed 10MB (5 backup files).
-
-## Development
-
-```bash
-# Run tests
-pytest
-
-# Lint code
-ruff check scripts/imports/
-
-# Type check
-mypy scripts/imports/
-```
 
 ## API Integration
 

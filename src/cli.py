@@ -266,6 +266,13 @@ def cmd_runs(args):
               f"{row['total_entities']:<8} {row['success_count']:<6} {row['fail_count']:<6} {row['skip_count']:<6}")
 
 
+def cmd_help(args):
+    """Show help message."""
+    import sys
+    sys.argv = ['cli.py', '--help']
+    main()
+
+
 def main():
     parser = argparse.ArgumentParser(description='Manage import state database')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
@@ -290,6 +297,8 @@ def main():
     runs_parser = subparsers.add_parser('runs', help='List all import runs')
     runs_parser.add_argument('--limit', type=int, default=10, help='Max runs to show')
 
+    subparsers.add_parser('help', help='Show this help message')
+
     args = parser.parse_args()
 
     if not args.command:
@@ -297,6 +306,7 @@ def main():
         return
 
     commands = {
+        'help': cmd_help,
         'status': cmd_status,
         'list': cmd_list,
         'stats': cmd_stats,
