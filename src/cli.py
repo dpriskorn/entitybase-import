@@ -282,11 +282,13 @@ def cmd_import(args):
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from jsonl_import import import_from_jsonl
 
+    api_url = f"http://{args.host}:{args.port}/{args.version}"
+
     asyncio.run(import_from_jsonl(
         args.jsonl_file,
         concurrency=args.concurrency,
         progress_interval=args.progress_interval,
-        api_url=args.api_url,
+        api_url=api_url,
         db_path=args.db_path,
         cleanup=args.cleanup,
         auto_cleanup=args.auto_cleanup,
@@ -304,7 +306,9 @@ def main():
     import_parser.add_argument('jsonl_file', help='Path to JSONL file to import')
     import_parser.add_argument('--concurrency', '-c', type=int, default=10, help='Number of parallel imports')
     import_parser.add_argument('--progress-interval', '-p', type=int, default=10, help='Show progress every N batches')
-    import_parser.add_argument('--api-url', default='http://localhost:8000/v1/entitybase', help='API base URL')
+    import_parser.add_argument('--host', default='localhost', help='API host')
+    import_parser.add_argument('--port', type=int, default=8083, help='API port')
+    import_parser.add_argument('--version', default='v1', help='API version')
     import_parser.add_argument('--db-path', default='import_state.db', help='Path to SQLite state database')
     import_parser.add_argument('--cleanup', action='store_true', help='Prompt to delete database after import')
     import_parser.add_argument('--auto-cleanup', action='store_true', help='Automatically delete database after import')
