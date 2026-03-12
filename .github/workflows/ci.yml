@@ -28,6 +28,7 @@ jobs:
         run: mypy .
 
   test:
+    needs: lint
     runs-on: ubuntu-latest
 
     steps:
