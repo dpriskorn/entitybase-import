@@ -14,7 +14,8 @@ help:
 setup: venv install
 
 venv:
-	test -d .venv || python3.14.3 -m venv .venv
+	pyenv local 3.14.3
+	test -d .venv || python -m venv .venv
 
 install:
 	.venv/bin/pip install -e .
