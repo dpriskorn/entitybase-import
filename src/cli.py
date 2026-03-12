@@ -281,7 +281,7 @@ def cmd_import(args):
     import sys
     from pathlib import Path
 
-    sys.path.insert(0, str(Path(__file__).parent.parent))
+    sys.path.insert(0, str(Path(__file__).parent))
     from jsonl_import import import_from_jsonl
 
     api_url = f"http://{args.host}:{args.port}/{args.version}/entitybase"
