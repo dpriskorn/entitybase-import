@@ -15,11 +15,11 @@ help:
 setup: venv install-dev
 
 install-python:
-	pyenv install 3.13.0
-	pyenv local 3.13.0
+	pyenv install 3.14.0
+	pyenv local 3.14.0
 
 venv:
-	poetry env use 3.13 || poetry env use python3.13
+	poetry env use 3.14 || poetry env use python3.14
 
 install:
 	poetry install
