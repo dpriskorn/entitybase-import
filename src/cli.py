@@ -2,6 +2,7 @@
 
 import argparse
 import sqlite3
+from pathlib import Path
 
 DB_PATH = "import_state.db"
 
@@ -299,6 +300,17 @@ def cmd_import(args):
     ))
 
 
+def cmd_download(args):
+    """Download Wikidata entities."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    from download_wikidata_entities import cmd_download as download_cmd
+
+    download_cmd(args)
+
+
 def main():
     parser = argparse.ArgumentParser(description='EntityBase Import CLI')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
@@ -316,6 +328,16 @@ def main():
     import_parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], help='Logging level')
     import_parser.add_argument('--from', dest='from_line', type=int, help='Start from line number (1-indexed)')
     import_parser.add_argument('--to', dest='to_line', type=int, help='Stop at line number (1-indexed)')
+
+    download_parser = subparsers.add_parser('download', help='Download Wikidata entities to JSONL')
+    download_parser.add_argument("entity_ids", nargs="*", help="Specific Wikidata entity IDs (e.g., Q42, P31, L42)")
+    download_parser.add_argument("--random-items", "-i", type=int, metavar="N", default=0, help="Download N random items (Q)")
+    download_parser.add_argument("--random-properties", "-p", type=int, metavar="N", default=0, help="Download N random properties (P)")
+    download_parser.add_argument("--random-lexemes", "-l", type=int, metavar="N", default=0, help="Download N random lexemes (L)")
+    download_parser.add_argument("--output", "-o", type=Path, required=True, help="Output JSONL file path (required)")
+    download_parser.add_argument("--append", "-a", action="store_true", help="Append to existing JSONL file")
+    download_parser.add_argument("--seed", "-s", type=int, default=None, help="Random seed for reproducibility")
+    download_parser.add_argument("--verbose", "-v", action="store_true", help="Print verbose output")
 
     subparsers.add_parser('status', help='Show current import status')
 
@@ -348,6 +370,7 @@ def main():
     commands = {
         'help': cmd_help,
         'import': cmd_import,
+        'download': cmd_download,
         'status': cmd_status,
         'list': cmd_list,
         'stats': cmd_stats,

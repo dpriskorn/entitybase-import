@@ -45,16 +45,20 @@ make setup
 
 ```bash
 # Show help
-python src/cli.py help
+python -m src.cli help
+
+# Download Wikidata entities
+python -m src.cli download -o data.jsonl Q42 P31
+python -m src.cli download -o data.jsonl --random-items 100
 
 # Import entities
-python src/cli.py import data/entities.jsonl
+python -m src.cli import data/entities.jsonl
 
 # With custom concurrency and API URL
-python src/cli.py import data/entities.jsonl -c 20 --api-url https://api.example.com
+python -m src.cli import data/entities.jsonl -c 20 --host api.example.com
 
 # Import specific line range
-python src/cli.py import data/entities.jsonl --from 1000 --to 2000
+python -m src.cli import data/entities.jsonl --from 1000 --to 2000
 ```
 
 ## CLI Commands
@@ -62,6 +66,7 @@ python src/cli.py import data/entities.jsonl --from 1000 --to 2000
 | Command | Description |
 |---------|-------------|
 | `import` | Import entities from JSONL file |
+| `download` | Download Wikidata entities to JSONL |
 | `status` | Show current import status |
 | `list` | List entities (with filters) |
 | `stats` | Show overall statistics |
@@ -73,26 +78,30 @@ python src/cli.py import data/entities.jsonl --from 1000 --to 2000
 ### Examples
 
 ```bash
+# Download entities from Wikidata
+python -m src.cli download -o data.jsonl Q42
+python -m src.cli download -o data.jsonl --random-items 50 --random-properties 5
+
 # Check import status
-python src/cli.py status
+python -m src.cli status
 
 # Show statistics
-python src/cli.py stats
+python -m src.cli stats
 
 # List failed entities
-python src/cli.py list --status failed
+python -m src.cli list --status failed
 
 # List all runs
-python src/cli.py runs
+python -m src.cli runs
 
 # Export failed to CSV
-python src/cli.py export --status failed --file failed.csv
+python -m src.cli export --status failed --file failed.csv
 
 # Reset specific run
-python src/cli.py reset --run-id 1
+python -m src.cli reset --run-id 1
 
 # Reset all state (will prompt for confirmation)
-python src/cli.py reset
+python -m src.cli reset
 ```
 
 ## Import Options
@@ -109,6 +118,38 @@ python src/cli.py reset
 | `--log-level` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `--from` | None | Start from line number (1-indexed) |
 | `--to` | None | Stop at line number (1-indexed) |
+
+## Download Command
+
+Download Wikidata entities and save as JSONL for import:
+
+```bash
+# Download specific entities
+python -m src.cli download -o data.jsonl Q42 P31 L42
+
+# Download random entities (ID ranges: items Q1-Q100M, properties P1-P10k, lexemes L1-L100k)
+python -m src.cli download -o data.jsonl --random-items 100
+python -m src.cli download -o data.jsonl --random-items 50 --random-properties 10 --random-lexemes 20
+
+# With seed for reproducibility
+python -m src.cli download -o data.jsonl --random-items 100 --seed 42
+
+# Append to existing file
+python -m src.cli download -o data.jsonl Q123 --append
+```
+
+### Download Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `entity_ids` | Optional | Specific Wikidata IDs (Q42, P31, L42) |
+| `--random-items, -i` | 0 | Download N random items (Q1-Q100,000,000) |
+| `--random-properties, -p` | 0 | Download N random properties (P1-P10,000) |
+| `--random-lexemes, -l` | 0 | Download N random lexemes (L1-L100,000) |
+| `--output, -o` | Required | Output JSONL file path |
+| `--append, -a` | False | Append to existing file |
+| `--seed, -s` | None | Random seed for reproducibility |
+| `--verbose, -v` | False | Print verbose output |
 
 ## JSONL Format
 
