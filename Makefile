@@ -1,44 +1,32 @@
-.PHONY: help setup install install-dev lint test typecheck clean venv install-python install-poetry
+.PHONY: help setup install lint test typecheck clean venv install-python
 
 help:
 	@echo "Available targets:"
-	@echo "  setup           - Create venv and install with dev dependencies"
+	@echo "  setup           - Create venv and install dependencies"
 	@echo "  install-python - Install Python 3.14 via pyenv"
-	@echo "  install-poetry - Reinstall poetry for current Python"
-	@echo "  install         - Install the package using Poetry"
-	@echo "  install-dev    - Install with dev dependencies"
+	@echo "  install         - Install the package using pip"
 	@echo "  lint           - Run ruff linter"
 	@echo "  test           - Run tests with pytest"
 	@echo "  typecheck      - Run mypy type checker"
 	@echo "  clean          - Remove virtual environment and cache files"
 	@echo "  venv           - Show/create virtual environment"
 
-install-poetry:
-	curl -sSL https://install.python-poetry.org | python3.14 -
-
-setup: venv install-dev
-
-install-python:
-	pyenv install 3.14.0
-	pyenv local 3.14.0
+setup: venv install
 
 venv:
-	poetry env use 3.14 || poetry env use python3.14
+	test -d .venv || python3.14 -m venv .venv
 
 install:
-	poetry install
-
-install-dev:
-	poetry install --with dev
+	.venv/bin/pip install -e .
 
 lint:
-	poetry run ruff check .
+	.venv/bin/ruff check .
 
 test:
-	poetry run pytest
+	.venv/bin/pytest
 
 typecheck:
-	poetry run mypy .
+	.venv/bin/mypy .
 
 clean:
 	rm -rf .venv
