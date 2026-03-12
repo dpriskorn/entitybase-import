@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Configuration
 DEFAULT_CONCURRENCY = 10
 DEFAULT_PROGRESS_INTERVAL = 10
-API_BASE_URL = "http://localhost:8083/v1"
+API_BASE_URL = "http://localhost:8083/v1/entitybase"
 DB_PATH = "import_state.db"
 
 # Retry configuration

@@ -282,7 +282,7 @@ def cmd_import(args):
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from jsonl_import import import_from_jsonl
 
-    api_url = f"http://{args.host}:{args.port}/{args.version}"
+    api_url = f"http://{args.host}:{args.port}/{args.version}/entitybase"
 
     asyncio.run(import_from_jsonl(
         args.jsonl_file,
