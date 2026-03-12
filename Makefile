@@ -14,7 +14,7 @@ help:
 setup: venv install
 
 venv:
-	test -d .venv || python3.14 -m venv .venv
+	test -d .venv || python3.14.3 -m venv .venv
 
 install:
 	.venv/bin/pip install -e .
