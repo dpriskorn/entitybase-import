@@ -119,6 +119,44 @@ python -m src.cli reset
 | `--from` | None | Start from line number (1-indexed) |
 | `--to` | None | Stop at line number (1-indexed) |
 
+## Import Examples
+
+```bash
+# Basic import (uses default API URL http://localhost:8000/v1/entitybase)
+python -m src.cli import data.jsonl
+
+# Import with higher concurrency for faster processing
+python -m src.cli import data.jsonl -c 20
+
+# Import to a specific API server
+python -m src.cli import data.jsonl --api-url http://api.example.com/v1/entitybase
+
+# Resume an interrupted import (automatically picks up where left off)
+python -m src.cli import data.jsonl
+
+# Import a specific range of lines
+python -m src.cli import data.jsonl --from 1000 --to 2000
+
+# Import with debug logging
+python -m src.cli import data.jsonl --log-level DEBUG
+
+# Import and auto-cleanup database after completion
+python -m src.cli import data.jsonl --auto-cleanup
+
+# Import using custom database file
+python -m src.cli import data.jsonl --db-path my_import_state.db
+```
+
+### Import a large dataset with progress tracking
+
+```bash
+# Import 100k+ entities with high concurrency
+python -m src.cli import large_data.jsonl -c 50 -p 100
+
+# Check progress while running (in another terminal)
+python -m src.cli status
+```
+
 ## Download Command
 
 Download Wikidata entities and save as JSONL for import:
