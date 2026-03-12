@@ -6,8 +6,48 @@ import sqlite3
 DB_PATH = "import_state.db"
 
 
+def _ensure_db():
+    """Ensure database tables exist."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS import_runs (
+            run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            start_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            end_time TIMESTAMP,
+            jsonl_file TEXT NOT NULL,
+            total_entities INTEGER NOT NULL,
+            success_count INTEGER DEFAULT 0,
+            fail_count INTEGER DEFAULT 0,
+            skip_count INTEGER DEFAULT 0,
+            concurrency INTEGER,
+            api_url TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS entities (
+            entity_id TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            line_number INTEGER,
+            run_id INTEGER,
+            last_attempt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            retry_count INTEGER DEFAULT 0,
+            error_message TEXT,
+            PRIMARY KEY (entity_id, run_id),
+            FOREIGN KEY (run_id) REFERENCES import_runs(run_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_entities_status ON entities(status);
+        CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(entity_type);
+        CREATE INDEX IF NOT EXISTS idx_entities_run_id ON entities(run_id);
+        CREATE INDEX IF NOT EXISTS idx_entities_last_attempt ON entities(last_attempt);
+    """)
+    conn.commit()
+    conn.close()
+
+
 def cmd_status(args):
     """Show current import status."""
+    _ensure_db()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
@@ -62,6 +102,7 @@ def cmd_status(args):
 
 def cmd_list(args):
     """List entities by status."""
+    _ensure_db()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
@@ -110,6 +151,7 @@ def cmd_list(args):
 
 def cmd_stats(args):
     """Show overall statistics."""
+    _ensure_db()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
@@ -144,6 +186,7 @@ def cmd_stats(args):
 
 def cmd_reset(args):
     """Reset import state."""
+    _ensure_db()
     conn = sqlite3.connect(DB_PATH)
 
     if args.run_id:
@@ -166,6 +209,7 @@ def cmd_reset(args):
 
 def cmd_export(args):
     """Export entities to CSV."""
+    _ensure_db()
     import csv
 
     conn = sqlite3.connect(DB_PATH)
@@ -198,6 +242,7 @@ def cmd_export(args):
 
 def cmd_runs(args):
     """List all import runs."""
+    _ensure_db()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
