@@ -22,7 +22,7 @@ install:
 lint:
 	.venv/bin/ruff check .
 
-test:
+test: lint
 	.venv/bin/pytest
 
 typecheck:
