@@ -2,30 +2,29 @@
 
 import sqlite3
 from typing import Optional, List, Dict, Any
-from dataclasses import dataclass
+from pydantic import BaseModel
 from contextlib import contextmanager
 from typing import cast
 
 DB_PATH = "import_state.db"
 
 
-@dataclass
-class EntityRecord:
+class EntityRecord(BaseModel):
     entity_id: str
     entity_type: str
     status: str
+    entity_data: str = ""
     line_number: int
     run_id: int
     last_attempt: str
     retry_count: int
-    error_message: Optional[str] = None
+    error_message: str = ""
 
 
-@dataclass
-class ImportRun:
+class ImportRun(BaseModel):
     run_id: int
     start_time: str
-    end_time: Optional[str]
+    end_time: Optional[str] = None
     jsonl_file: str
     total_entities: int
     success_count: int
@@ -76,6 +75,7 @@ class ImportStateManager:
                     entity_id TEXT NOT NULL,
                     entity_type TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'pending',
+                    entity_data TEXT,
                     line_number INTEGER,
                     run_id INTEGER,
                     last_attempt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -120,13 +120,14 @@ class ImportStateManager:
 
     def add_entities(self, run_id: int, entities: List[Dict[str, Any]]):
         """Bulk add entities in pending state."""
+        import json
         with self._get_connection() as conn:
             conn.executemany("""
                 INSERT OR REPLACE INTO entities
-                (entity_id, entity_type, status, line_number, run_id)
-                VALUES (?, ?, 'pending', ?, ?)
+                (entity_id, entity_type, status, entity_data, line_number, run_id)
+                VALUES (?, ?, 'pending', ?, ?, ?)
             """, [
-                (e['id'], e.get('type', 'item'), line_num, run_id)
+                (e['id'], e.get('type', 'item'), json.dumps(e), line_num, run_id)
                 for line_num, e in enumerate(entities, 1)
             ])
             conn.commit()
@@ -146,13 +147,24 @@ class ImportStateManager:
             conn.commit()
 
             cursor = conn.execute("""
-                SELECT entity_id, entity_type, status, line_number, run_id,
+                SELECT entity_id, entity_type, status, entity_data, line_number, run_id,
                        last_attempt, retry_count, error_message
                 FROM entities
                 WHERE run_id = ? AND status = 'processing'
                 LIMIT ?
             """, (run_id, limit))
-            return [EntityRecord(**row) for row in cursor.fetchall()]
+            rows = cursor.fetchall()
+            return [EntityRecord(
+                entity_id=row[0],
+                entity_type=row[1],
+                status=row[2],
+                entity_data=row[3] or "",
+                line_number=row[4],
+                run_id=row[5],
+                last_attempt=row[6],
+                retry_count=row[7],
+                error_message=row[8] or ""
+            ) for row in rows]
 
     def mark_success(self, entity_id: str, run_id: int):
         """Mark entity as successfully imported."""

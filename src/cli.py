@@ -27,6 +27,7 @@ def _ensure_db():
             entity_id TEXT NOT NULL,
             entity_type TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
+            entity_data TEXT,
             line_number INTEGER,
             run_id INTEGER,
             last_attempt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

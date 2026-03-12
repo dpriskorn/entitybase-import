@@ -389,7 +389,7 @@ async def import_from_jsonl(
                 import_entity(
                     session,
                     record.entity_id,
-                    {},
+                    json.loads(record.entity_data) if record.entity_data else {},
                     record.entity_type,
                     state_manager,
                     run_id,
