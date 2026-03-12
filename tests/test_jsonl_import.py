@@ -1,6 +1,7 @@
 """Tests for jsonl_import module - core business logic."""
 
 import logging
+from pathlib import Path
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
 import httpx
@@ -68,6 +69,27 @@ class TestProgressTracker:
         assert progress['percent'] == 100.0
         assert progress['eta_seconds'] == 0
 
+    def test_progress_tracker_stores_attributes(self):
+        """Test that elapsed_seconds and rate_per_second are stored."""
+        tracker = ProgressTracker(total=100)
+        tracker.update(10)
+        
+        assert hasattr(tracker, 'elapsed_seconds')
+        assert hasattr(tracker, 'rate_per_second')
+        assert tracker.elapsed_seconds >= 0
+        assert tracker.rate_per_second >= 0
+
+    def test_progress_tracker_multiple_updates(self):
+        """Test multiple batch updates accumulate correctly."""
+        tracker = ProgressTracker(total=100)
+        tracker.update(25)
+        tracker.update(25)
+        tracker.update(25)
+        
+        progress = tracker.update(25)
+        assert progress['processed'] == 100
+        assert progress['percent'] == 100.0
+
     def test_progress_tracker_zero_total(self):
         """Test edge case with zero total."""
         tracker = ProgressTracker(total=0)
@@ -122,14 +144,15 @@ class TestFormatFunctions:
         assert format_elapsed(60) == "00:01:00"
         assert format_elapsed(3600) == "01:00:00"
         assert format_elapsed(3661) == "01:01:01"
+        assert format_elapsed(86399) == "23:59:59"
 
     def test_print_progress_compact(self, capsys, sample_run_stats):
         """Test compact progress output."""
         print_progress_compact(1, sample_run_stats)
         captured = capsys.readouterr()
-        assert "Batch" in captured.out
         assert "50" in captured.out
         assert "50.0%" in captured.out
+        assert "/s" in captured.out
 
     def test_print_progress_detailed(self, capsys, sample_run_stats):
         """Test detailed progress output."""
@@ -160,7 +183,8 @@ class TestImportEntity:
             {"type": "item", "id": "Q1"},
             "item",
             mock_state_manager,
-            1
+            1,
+            "http://test.com"
         )
 
         assert result == 'success'
@@ -185,7 +209,8 @@ class TestImportEntity:
             {"type": "item", "id": "Q1"},
             "item",
             mock_state_manager,
-            1
+            1,
+            "http://test.com"
         )
 
         assert result == 'skip'
@@ -210,7 +235,8 @@ class TestImportEntity:
             {"type": "item", "id": "Q1"},
             "item",
             mock_state_manager,
-            1
+            1,
+            "http://test.com"
         )
 
         assert result == 'failed'
@@ -241,7 +267,8 @@ class TestImportEntity:
             {"type": "item", "id": "Q1"},
             "item",
             mock_state_manager,
-            1
+            1,
+            "http://test.com"
         )
 
         assert result == 'success'
@@ -265,7 +292,8 @@ class TestImportEntity:
             {"type": "item", "id": "Q1"},
             "item",
             mock_state_manager,
-            1
+            1,
+            "http://test.com"
         )
 
         assert result == 'success'
@@ -290,7 +318,8 @@ class TestImportEntity:
             {"type": "item", "id": "Q1"},
             "item",
             mock_state_manager,
-            1
+            1,
+            "http://test.com"
         )
 
         assert result == 'failed'
@@ -306,7 +335,8 @@ class TestImportEntity:
             {"type": "item", "id": "Q1"},
             "item",
             mock_state_manager,
-            1
+            1,
+            "http://test.com"
         )
 
         assert result == 'failed'
@@ -327,7 +357,8 @@ class TestImportEntity:
                 {"type": "item", "id": "Q1"},
                 "item",
                 mock_state_manager,
-                1
+                1,
+                "http://test.com"
             )
 
         assert any("Starting import for item Q1" in record.message for record in caplog.records)
@@ -468,3 +499,80 @@ class TestImportFromJsonl:
             )
 
             assert mock_client.post.called
+
+    async def test_import_from_jsonl_from_line(self, sample_jsonl_file, temp_db_path):
+        """Test importing from a specific line."""
+        with patch('src.jsonl_import.httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            response = Mock()
+            response.status_code = 200
+            response.text = "OK"
+            response.raise_for_status = Mock()
+            mock_client.post = AsyncMock(return_value=response)
+
+            await import_from_jsonl(
+                sample_jsonl_file,
+                concurrency=2,
+                from_line=3,
+                api_url="http://test.com",
+                db_path=temp_db_path,
+                auto_cleanup=True
+            )
+
+    async def test_import_from_jsonl_to_line(self, sample_jsonl_file, temp_db_path):
+        """Test importing up to a specific line."""
+        with patch('src.jsonl_import.httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            response = Mock()
+            response.status_code = 200
+            response.text = "OK"
+            response.raise_for_status = Mock()
+            mock_client.post = AsyncMock(return_value=response)
+
+            await import_from_jsonl(
+                sample_jsonl_file,
+                concurrency=2,
+                to_line=2,
+                api_url="http://test.com",
+                db_path=temp_db_path,
+                auto_cleanup=True
+            )
+
+
+@pytest.fixture
+def empty_jsonl_file(tmp_path: Path) -> Path:
+    """Create an empty JSONL file."""
+    file_path = tmp_path / "empty.jsonl"
+    file_path.write_text("")
+    return file_path
+
+
+@pytest.mark.asyncio
+class TestImportFromJsonlEdgeCases:
+    """Test edge cases for import_from_jsonl."""
+
+    async def test_import_empty_file(self, empty_jsonl_file, temp_db_path):
+        """Test importing an empty file."""
+        with patch('src.jsonl_import.httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            await import_from_jsonl(
+                empty_jsonl_file,
+                concurrency=2,
+                api_url="http://test.com",
+                db_path=temp_db_path,
+                auto_cleanup=True
+            )
+
+            assert mock_client.post.call_count == 0

@@ -47,6 +47,8 @@ class ProgressTracker:
         self.start_time = time.time()
         self.last_update = self.start_time
         self.last_processed = 0
+        self.elapsed_seconds = 0.0
+        self.rate_per_second = 0.0
 
     def update(self, batch_size: int) -> Dict[str, Any]:
         """Update progress after processing a batch."""
@@ -70,6 +72,8 @@ class ProgressTracker:
 
         self.last_update = now
         self.last_processed = self.processed
+        self.elapsed_seconds = elapsed
+        self.rate_per_second = rate_per_second
 
         eta_seconds = None
         eta_formatted = "N/A"
@@ -129,9 +133,9 @@ def print_progress_compact(batch_num: int, progress: Dict[str, Any]):
     timestamp = datetime.now().strftime("%H:%M:%S")
     rate = format_rate(progress['rate_per_minute'])
     eta = progress['eta_formatted']
-    print(f"[{timestamp}] Batch {batch_num:4d}: "
-          f"{progress['processed']:8,} / {progress['total']:8,} "
-          f"({progress['percent']:5.1f}%) | {rate} | ETA: {eta}")
+    rate_per_sec = progress['rate_per_second']
+    print(f"[{timestamp}] {progress['processed']:8,} / {progress['total']:8,} "
+          f"({progress['percent']:5.1f}%) | {rate_per_sec:6.1f}/s | {rate} | ETA: {eta}")
 
 
 def print_progress_detailed(batch_num: int, progress: Dict[str, Any]):
@@ -143,8 +147,8 @@ def print_progress_detailed(batch_num: int, progress: Dict[str, Any]):
     print(f"Entities:      {progress['processed']:,} / {progress['total']:,} "
           f"({progress['percent']:.2f}%)")
     print(f"Elapsed:       {elapsed}")
-    print(f"Rate:          {progress['rate_per_minute']:.1f} entities/minute "
-          f"({progress['rate_per_hour']:,.0f}/hour)")
+    print(f"Rate:          {progress['rate_per_second']:.1f} entities/second "
+          f"({progress['rate_per_minute']:.1f}/min, {progress['rate_per_hour']:,.0f}/hour)")
     print(f"ETA:           {progress['eta_formatted']}")
     print(f"{'='*70}")
 
@@ -413,10 +417,15 @@ async def import_from_jsonl(
     state_manager.finish_run(run_id, success_count, fail_count, skip_count)
 
     tracker.update(0)
+    elapsed = tracker.elapsed_seconds
+    elapsed_formatted = format_elapsed(elapsed)
+    rate_per_sec = tracker.rate_per_second
     print(f"\nTotal:        {len(entities):,}")
     print(f"Success:      {success_count:,}")
     print(f"Failed:       {fail_count:,}")
     print(f"Skipped:      {skip_count:,}")
+    print(f"Speed:        {rate_per_sec:.1f} entities/second")
+    print(f"Elapsed:      {elapsed_formatted}")
     print(f"Run ID:       {run_id}")
     print("View stats:   python scripts/imports/cli.py status")
     print(f"Database:      {db_path}")

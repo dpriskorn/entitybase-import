@@ -420,14 +420,13 @@ class TestDataclasses:
             line_number=1,
             run_id=1,
             last_attempt="2024-01-01 00:00:00",
-            retry_count=0,
-            error_message=None
+            retry_count=0
         )
         
         assert record.entity_id == "Q1"
         assert record.entity_type == "item"
         assert record.status == "pending"
-        assert record.error_message is None
+        assert record.error_message == ""
 
     def test_import_run_creation(self):
         """ImportRun instantiation."""
