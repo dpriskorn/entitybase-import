@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Configuration
 DEFAULT_CONCURRENCY = 10
 DEFAULT_PROGRESS_INTERVAL = 10
-API_BASE_URL = "http://localhost:8083/v1/entitybase"
+DEFAULT_API_URL = "http://localhost:8083/v1/entitybase"
 DB_PATH = "import_state.db"
 
 # Retry configuration
@@ -245,7 +245,7 @@ async def import_from_jsonl(
     jsonl_path: Path,
     concurrency: int = DEFAULT_CONCURRENCY,
     progress_interval: int = DEFAULT_PROGRESS_INTERVAL,
-    api_url: str = API_BASE_URL,
+    api_url: str = DEFAULT_API_URL,
     db_path: str = DB_PATH,
     cleanup: bool = False,
     auto_cleanup: bool = False,
@@ -461,8 +461,8 @@ def main():
     parser.add_argument(
         '--api-url',
         type=str,
-        default=API_BASE_URL,
-        help=f'API base URL (default: {API_BASE_URL})'
+        default=DEFAULT_API_URL,
+        help=f'API base URL (default: {DEFAULT_API_URL})'
     )
     parser.add_argument(
         '--db-path',
