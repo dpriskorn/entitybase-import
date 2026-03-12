@@ -27,10 +27,16 @@ MAX_LEXEME_ID = 100_000
 
 def generate_random_entity_ids(entity_type: str, count: int, max_id: int) -> list[str]:
     """Generate random entity IDs within valid range."""
+    prefix_map = {
+        "item": "Q",
+        "property": "P",
+        "lexeme": "L",
+    }
+    prefix = prefix_map.get(entity_type.lower(), entity_type[0].upper())
     ids = []
     for _ in range(count):
         rand_id = random.randint(1, max_id)
-        ids.append(f"{entity_type[0].upper()}{rand_id}")
+        ids.append(f"{prefix}{rand_id}")
     return ids
 
 
