@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Configuration
 DEFAULT_CONCURRENCY = 10
 DEFAULT_PROGRESS_INTERVAL = 10
-API_BASE_URL = "http://localhost:8000/v1/entitybase"
+API_BASE_URL = "http://localhost:8083/v1"
 DB_PATH = "import_state.db"
 
 # Retry configuration
@@ -155,7 +155,8 @@ async def import_entity(
     entity_data: Dict[str, Any],
     entity_type: str,
     state_manager,
-    run_id: int
+    run_id: int,
+    api_url: str
 ) -> str:
     """Import a single entity with retry logic.
 
@@ -171,7 +172,7 @@ async def import_entity(
             logger.debug(f"Sending data to API: {json.dumps(entity_data, indent=2)}")
 
             response = await session.post(
-                f"{API_BASE_URL}/import",
+                f"{api_url}/import",
                 json=entity_data,
                 headers={
                     "X-User-ID": "0",
@@ -391,7 +392,8 @@ async def import_from_jsonl(
                     {},
                     record.entity_type,
                     state_manager,
-                    run_id
+                    run_id,
+                    api_url
                 )
                 for record in batch
             ]
