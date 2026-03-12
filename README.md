@@ -7,21 +7,21 @@ A command-line tool for importing entities into the EntityBase API from JSONL fi
 ```mermaid
 flowchart TD
     subgraph Input
-        JSONL[("JSONL File")]
+        JSONL["JSONL File"]
     end
 
     subgraph CLI
-        CLI[("cli.py")]
+        CLI["cli.py"]
     end
 
     subgraph Core
-        IMP[("import_from_jsonl")]
-        SM[("state_manager")]
-        API[("EntityBase API")]
+        IMP["import_from_jsonl"]
+        SM["state_manager"]
+        API["EntityBase API"]
     end
 
     subgraph Storage
-        DB[(("import_state.db"))]
+        DB[("import_state.db")]
     end
 
     JSONL --> CLI
