@@ -273,9 +273,50 @@ def cmd_help(args):
     main()
 
 
+def cmd_import(args):
+    """Import entities from JSONL file."""
+    if args.help:
+        import sys
+        sys.argv = ['cli.py', 'import', '--help']
+        main()
+        return
+
+    import asyncio
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from jsonl_import import import_from_jsonl
+
+    asyncio.run(import_from_jsonl(
+        args.jsonl_file,
+        concurrency=args.concurrency,
+        progress_interval=args.progress_interval,
+        api_url=args.api_url,
+        db_path=args.db_path,
+        cleanup=args.cleanup,
+        auto_cleanup=args.auto_cleanup,
+        log_level=args.log_level,
+        from_line=args.from_line,
+        to_line=args.to_line
+    ))
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Manage import state database')
+    parser = argparse.ArgumentParser(description='EntityBase Import CLI')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
+
+    import_parser = subparsers.add_parser('import', help='Import entities from JSONL file')
+    import_parser.add_argument('jsonl_file', help='Path to JSONL file to import')
+    import_parser.add_argument('--concurrency', '-c', type=int, default=10, help='Number of parallel imports')
+    import_parser.add_argument('--progress-interval', '-p', type=int, default=10, help='Show progress every N batches')
+    import_parser.add_argument('--api-url', default='http://localhost:8000/v1/entitybase', help='API base URL')
+    import_parser.add_argument('--db-path', default='import_state.db', help='Path to SQLite state database')
+    import_parser.add_argument('--cleanup', action='store_true', help='Prompt to delete database after import')
+    import_parser.add_argument('--auto-cleanup', action='store_true', help='Automatically delete database after import')
+    import_parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], help='Logging level')
+    import_parser.add_argument('--from', dest='from_line', type=int, help='Start from line number (1-indexed)')
+    import_parser.add_argument('--to', dest='to_line', type=int, help='Stop at line number (1-indexed)')
 
     subparsers.add_parser('status', help='Show current import status')
 
@@ -307,6 +348,7 @@ def main():
 
     commands = {
         'help': cmd_help,
+        'import': cmd_import,
         'status': cmd_status,
         'list': cmd_list,
         'stats': cmd_stats,

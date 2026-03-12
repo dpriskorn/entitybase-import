@@ -22,8 +22,8 @@ dev = [
 ]
 
 [project.scripts]
-entitybase-import = "scripts.imports.jsonl_import:main"
+entitybase-import = "cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["scripts*"]
+include = ["src*"]

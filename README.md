@@ -10,9 +10,13 @@ flowchart TD
         JSONL[("JSONL File")]
     end
 
+    subgraph CLI
+        CLI[("cli.py")]
+    end
+
     subgraph Core
-        IMP[("jsonl_import.py")]
-        SM[("state_manager.py")]
+        IMP[("import_from_jsonl")]
+        SM[("state_manager")]
         API[("EntityBase API")]
     end
 
@@ -20,26 +24,24 @@ flowchart TD
         DB[(("import_state.db"))]
     end
 
-    subgraph CLI
-        CLI[("cli.py")]
-    end
-
-    JSONL --> IMP
+    JSONL --> CLI
+    CLI --> IMP
     IMP --> SM
     SM <--> DB
     IMP --> API
     CLI --> DB
 
     style JSONL fill:#f9f,stroke:#333
-    style IMP fill:#bbf,stroke:#333
+    style CLI fill:#bbf,stroke:#333
+    style IMP fill:#bfb,stroke:#333
     style SM fill:#bfb,stroke:#333
     style API fill:#fbb,stroke:#333
     style DB fill:#ffd,stroke:#333
-    style CLI fill:#bff,stroke:#333
 ```
 
 ## Features
 
+- **Unified CLI**: Single entry point for import and state management
 - **Parallel Processing**: Configurable concurrency for faster imports
 - **Resume Capability**: SQLite-based state management to track progress and resume interrupted imports
 - **Retry Logic**: Automatic retry with exponential backoff for failed imports
@@ -56,65 +58,76 @@ cd entitybase-import
 
 # Setup virtual environment and install dependencies
 make setup
-
-# Or step by step:
-make venv          # Create virtual environment
-make install       # Install package
 ```
-
-## Requirements
-
-- Python >= 3.14
-- Running EntityBase API instance
-- SQLite3 (for state management)
 
 ## Quick Start
 
 ```bash
-# Basic import
-python scripts/imports/jsonl_import.py data/entities.jsonl
+# Show help
+python src/cli.py help
+
+# Import entities
+python src/cli.py import data/entities.jsonl
 
 # With custom concurrency and API URL
-python scripts/imports/jsonl_import.py data/entities.jsonl \
-  --concurrency 20 \
-  --api-url https://api.example.com/v1/entitybase
-
-# With cleanup prompt
-python scripts/imports/jsonl_import.py data/entities.jsonl --cleanup
-
-# Auto-cleanup without prompt
-python scripts/imports/jsonl_import.py data/entities.jsonl --auto-cleanup
-
-# With custom log file and debug level
-python scripts/imports/jsonl_import.py data/entities.jsonl \
-  --log-file logs/my_import.log \
-  --log-level DEBUG
+python src/cli.py import data/entities.jsonl -c 20 --api-url https://api.example.com
 
 # Import specific line range
-python scripts/imports/jsonl_import.py data/entities.jsonl \
-  --from 1000 \
-  --to 2000
-
-# Import from line 1000 to end
-python scripts/imports/jsonl_import.py data/entities.jsonl \
-  --from 1000
+python src/cli.py import data/entities.jsonl --from 1000 --to 2000
 ```
 
-## Command-Line Options
+## CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `import` | Import entities from JSONL file |
+| `status` | Show current import status |
+| `list` | List entities (with filters) |
+| `stats` | Show overall statistics |
+| `runs` | List all import runs |
+| `export` | Export entities to CSV |
+| `reset` | Reset import state |
+| `help` | Show this help message |
+
+### Examples
+
+```bash
+# Check import status
+python src/cli.py status
+
+# Show statistics
+python src/cli.py stats
+
+# List failed entities
+python src/cli.py list --status failed
+
+# List all runs
+python src/cli.py runs
+
+# Export failed to CSV
+python src/cli.py export --status failed --file failed.csv
+
+# Reset specific run
+python src/cli.py reset --run-id 1
+
+# Reset all state (will prompt for confirmation)
+python src/cli.py reset
+```
+
+## Import Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `jsonl_file` | Required | Path to JSONL file to import |
 | `--concurrency, -c` | 10 | Number of parallel imports |
-| `--progress-interval, -p` | 10 | Show detailed progress every N batches |
+| `--progress-interval, -p` | 10 | Show progress every N batches |
 | `--api-url` | `http://localhost:8000/v1/entitybase` | API base URL |
 | `--db-path` | `import_state.db` | Path to SQLite state database |
 | `--cleanup` | False | Prompt to delete database after import |
 | `--auto-cleanup` | False | Automatically delete database (no prompt) |
-| `--log-file` | `logs/import_YYYY-MM-DD_HH-MM-SS.log` | Path to log file |
 | `--log-level` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
-| `--from-line, --from` | None | Start importing from line number (1-indexed) |
-| `--to-line, --to` | None | Stop importing at line number (1-indexed) |
+| `--from` | None | Start from line number (1-indexed) |
+| `--to` | None | Stop at line number (1-indexed) |
 
 ## JSONL Format
 
@@ -135,18 +148,6 @@ The import tool uses SQLite to track import state:
 - **Skipped**: Already exists in the database (409 Conflict)
 - **Failed**: Import failed with error details
 
-Use the CLI to manage state:
-
-```bash
-python src/cli.py help                  # Show all commands
-python src/cli.py status                 # Show current import status
-python src/cli.py stats                  # Show overall statistics
-python src/cli.py list --status failed   # List failed entities
-python src/cli.py runs                   # List all import runs
-python src/cli.py reset                  # Reset all state (prompts confirmation)
-python src/cli.py reset --run-id 1       # Reset specific run
-```
-
 ## Development
 
 ```bash
@@ -159,23 +160,7 @@ make install                  # Install package
 make lint                     # Run ruff linter
 make test                     # Run tests (includes lint first)
 make typecheck                # Run mypy type checker
-
-# Quick reference
-make venv                     # Show virtual environment info
 ```
-
-## Logging
-
-Logs are written to both console and file:
-
-- **Console**: Shows progress and errors at the configured log level
-- **File**: Contains detailed debug information including:
-  - Run ID for correlation
-  - Function and line number
-  - Request/response details
-  - Timing information
-
-Log files are rotated automatically when they exceed 10MB (5 backup files).
 
 ## API Integration
 
