@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Configuration
 DEFAULT_CONCURRENCY = 10
 DEFAULT_PROGRESS_INTERVAL = 10
-DEFAULT_API_URL = "http://localhost:8083/v1/entitybase"
+DEFAULT_API_URL = "http://localhost:8083/v1/import"
 DB_PATH = "import_state.db"
 
 # Retry configuration
@@ -176,7 +176,7 @@ async def import_entity(
             logger.debug(f"Sending data to API: {json.dumps(entity_data, indent=2)}")
 
             response = await session.post(
-                f"{api_url}/import",
+                f"{api_url}",
                 json=entity_data,
                 headers={
                     "X-User-ID": "0",
@@ -358,7 +358,7 @@ async def import_from_jsonl(
         jsonl_file=str(jsonl_path),
         total_entities=len(entities),
         concurrency=concurrency,
-        api_url=f"{api_url}/import"
+        api_url=f"{api_url}"
     )
     print(f"Created run #{run_id}")
 
