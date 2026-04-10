@@ -282,7 +282,7 @@ def cmd_import(args):
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).parent))
-    from jsonl_import import import_from_jsonl
+    from src.jsonl_import import import_from_jsonl  # type: ignore[import-not-found]
 
     api_url = f"http://{args.host}:{args.port}/{args.version}/import"
 
@@ -306,7 +306,7 @@ def cmd_download(args):
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).parent))
-    from download_wikidata_entities import cmd_download as download_cmd
+    from src.download_wikidata_entities import cmd_download as download_cmd  # type: ignore[import-not-found]
 
     download_cmd(args)
 

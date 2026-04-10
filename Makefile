@@ -1,36 +1,29 @@
-.PHONY: help setup install lint test typecheck clean venv install-python
+.PHONY: help setup install lint test typecheck clean
 
 help:
 	@echo "Available targets:"
-	@echo "  setup           - Create venv and install dependencies"
-	@echo "  install-python - Install Python 3.14 via pyenv"
-	@echo "  install         - Install the package using pip"
+	@echo "  setup           - Install dependencies with poetry"
+	@echo "  install        - Install the package with poetry"
 	@echo "  lint           - Run ruff linter"
 	@echo "  test           - Run tests with pytest"
 	@echo "  typecheck      - Run mypy type checker"
-	@echo "  clean          - Remove virtual environment and cache files"
-	@echo "  venv           - Show/create virtual environment"
+	@echo "  clean          - Remove cache files"
 
-setup: venv install
-
-venv:
-	pyenv local 3.14.3
-	test -d .venv || python -m venv .venv
+setup: install
 
 install:
-	.venv/bin/pip install -e .
+	poetry install
 
 lint:
-	.venv/bin/ruff check .
+	poetry run ruff check .
 
 test: lint
-	.venv/bin/pytest
+	poetry run pytest
 
 typecheck:
-	.venv/bin/mypy .
+	poetry run mypy .
 
 clean:
-	rm -rf .venv
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
-	rm -rf .mypy_cache .pytest_cache
+	rm -rf .mypy_cache .pytest_cache .ruff_cache
