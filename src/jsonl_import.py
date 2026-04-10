@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 import httpx
+from httpx import ConnectError, ConnectTimeout, NetworkError, ReadError, RemoteProtocolError
 from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -23,6 +24,10 @@ DB_PATH = "import_state.db"
 MAX_RETRIES = 3
 RETRY_DELAY = 2.0
 
+# API readiness check
+API_READY_TIMEOUT = 300  # seconds
+API_READY_CHECK_INTERVAL = 2  # seconds
+
 # Request timeout (seconds) - important for large entities
 REQUEST_TIMEOUT = 300.0
 
@@ -36,6 +41,34 @@ LIMITS = httpx.Limits(
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def wait_for_api(api_url: str, timeout: int = API_READY_TIMEOUT) -> bool:
+    """Wait for API to be ready before starting import.
+    
+    Returns True when API is ready, False if timeout reached.
+    """
+    logger.info(f"Waiting for API at {api_url} to be ready...")
+    base_url = api_url.rsplit('/v1/', 1)[0]
+    
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{base_url}/health")
+                if response.status_code == 200:
+                    elapsed = time.time() - start_time
+                    logger.info(f"API is ready! (took {elapsed:.1f}s)")
+                    return True
+        except Exception:
+            pass
+        
+        elapsed = time.time() - start_time
+        logger.info(f"Waiting for API... ({elapsed:.0f}s elapsed)")
+        await asyncio.sleep(API_READY_CHECK_INTERVAL)
+    
+    logger.error(f"API not ready after {timeout}s")
+    return False
 
 
 class ProgressTracker:
@@ -236,6 +269,34 @@ async def import_entity(
                 state_manager.mark_failed(entity_id, run_id, error_msg)
                 return 'failed'
 
+        except (ConnectError, ConnectTimeout) as e:
+            if attempt < MAX_RETRIES - 1:
+                retry_delay = RETRY_DELAY * (attempt + 1)
+                logger.warning(
+                    f"Connection error for {entity_id} (attempt {attempt + 1}/{MAX_RETRIES}), "
+                    f"retrying in {retry_delay}s: {e}"
+                )
+                await asyncio.sleep(retry_delay)
+            else:
+                error_msg = f"Connection failed for {entity_id} after {MAX_RETRIES} attempts: {e}"
+                logger.error(error_msg)
+                state_manager.mark_failed(entity_id, run_id, error_msg)
+                return 'failed'
+
+        except (NetworkError, ReadError, RemoteProtocolError) as e:
+            if attempt < MAX_RETRIES - 1:
+                retry_delay = RETRY_DELAY * (attempt + 1)
+                logger.warning(
+                    f"Network error for {entity_id} (attempt {attempt + 1}/{MAX_RETRIES}), "
+                    f"retrying in {retry_delay}s: {e}"
+                )
+                await asyncio.sleep(retry_delay)
+            else:
+                error_msg = f"Network error for {entity_id} after {MAX_RETRIES} attempts: {e}"
+                logger.error(error_msg)
+                state_manager.mark_failed(entity_id, run_id, error_msg)
+                return 'failed'
+
         except Exception as e:
             error_msg = f"Unexpected error importing {entity_id}: {type(e).__name__}: {e}"
             logger.error(error_msg)
@@ -326,6 +387,12 @@ async def import_from_jsonl(
     logger.info(f"Log file: {log_file}")
     logger.info(f"Log level: {log_level}")
     logger.debug(f"Command line arguments: {sys.argv}")
+
+    if not await wait_for_api(api_url):
+        logger.error("API not available, aborting import")
+        print("\nERROR: EntityBase API is not responding. Please ensure the API is running.")
+        print(f"Waiting timed out after {API_READY_TIMEOUT}s")
+        return
 
     logger.info(f"Starting import from {jsonl_path}")
     logger.info(f"Concurrency: {concurrency}")
