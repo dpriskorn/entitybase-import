@@ -101,7 +101,15 @@ def cmd_download(args):
         print("No valid entities to download.", file=sys.stderr)
         sys.exit(1)
 
-    output_path = args.output
+    if args.output is None:
+        data_dir = Path("data")
+        data_dir.mkdir(exist_ok=True)
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = data_dir / f"entities_{timestamp}.jsonl"
+    else:
+        output_path = args.output
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not args.append and output_path.exists():
         response = input(f"Overwrite {output_path}? [y/N]: ").strip().lower()
@@ -178,8 +186,8 @@ def main():
     download_parser.add_argument(
         "--output", "-o",
         type=Path,
-        required=True,
-        help="Output JSONL file path (required)",
+        default=None,
+        help="Output JSONL file path (default: data/entities_TIMESTAMP.jsonl)",
     )
     download_parser.add_argument(
         "--append", "-a",

@@ -334,7 +334,7 @@ def main():
     download_parser.add_argument("--random-items", "-i", type=int, metavar="N", default=0, help="Download N random items (Q)")
     download_parser.add_argument("--random-properties", "-p", type=int, metavar="N", default=0, help="Download N random properties (P)")
     download_parser.add_argument("--random-lexemes", "-l", type=int, metavar="N", default=0, help="Download N random lexemes (L)")
-    download_parser.add_argument("--output", "-o", type=Path, required=True, help="Output JSONL file path (required)")
+    download_parser.add_argument("--output", "-o", type=Path, default=None, help="Output JSONL file path (default: data/entities_TIMESTAMP.jsonl)")
     download_parser.add_argument("--append", "-a", action="store_true", help="Append to existing JSONL file")
     download_parser.add_argument("--seed", "-s", type=int, default=None, help="Random seed for reproducibility")
     download_parser.add_argument("--verbose", "-v", action="store_true", help="Print verbose output")
