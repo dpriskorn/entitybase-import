@@ -558,10 +558,10 @@ async def import_from_jsonl(
         print(f"  Resuming: {len(skip_lines):,} entities already imported")
 
     tracker = ProgressTracker(total=entity_count)
-    tracker.processed = skip_count  # Already imported before
     success_count = 0
     fail_count = 0
     skip_count = len(skip_lines)
+    tracker.processed = skip_count  # Already imported before
     imported_count = 0
     start_import = time.time()
     last_report = start_import
