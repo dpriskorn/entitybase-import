@@ -40,38 +40,42 @@ download-items:
 # Ensure lexeme dump is downloaded (skip if exists)
 [private]
 ensure-lexemes:
-    @if [ ! -f data/latest-lexemes.json.gz ]; then just download-lexemes; else echo "Using existing data/latest-lexemes.json.gz"; fi
+    @if ls data/lexemes-*.json.gz 1>/dev/null 2>&1; then \
+      echo "Using existing $$(ls -t data/lexemes-*.json.gz | head -1)"; \
+    else just download-lexemes; fi
 
 # Ensure items dump is downloaded (skip if exists)
 [private]
 ensure-items:
-    @if [ ! -f data/latest-all.json.gz ]; then just download-items; else echo "Using existing data/latest-all.json.gz"; fi
+    @if ls data/items-*.json.gz 1>/dev/null 2>&1; then \
+      echo "Using existing $$(ls -t data/items-*.json.gz | head -1)"; \
+    else just download-items; fi
 
 # Import all Wikidata lexemes
 import-lexemes: ensure-lexemes
-    poetry run python -m src.cli import data/latest-lexemes.json.gz
+    poetry run python -m src.cli import "$$(ls -t data/lexemes-*.json.gz | head -1)"
 
 # Import all Wikidata lexemes with custom concurrency
 import-lexemes-fast concurrency="100": ensure-lexemes
-    poetry run python -m src.cli import data/latest-lexemes.json.gz -c {{concurrency}}
+    poetry run python -m src.cli import "$$(ls -t data/lexemes-*.json.gz | head -1)" -c {{concurrency}}
 
 # Import all Wikidata items (WARNING: very large, takes days)
 import-items: ensure-items
-    poetry run python -m src.cli import data/latest-all.json.gz
+    poetry run python -m src.cli import "$$(ls -t data/items-*.json.gz | head -1)"
 
 # Import all Wikidata items with custom concurrency
 import-items-fast concurrency="100": ensure-items
-    poetry run python -m src.cli import data/latest-all.json.gz -c {{concurrency}}
+    poetry run python -m src.cli import "$$(ls -t data/items-*.json.gz | head -1)" -c {{concurrency}}
 
 # Resume interrupted lexeme import
 resume-lexemes:
-    test -f data/latest-lexemes.json.gz || (echo "ERROR: data/latest-lexemes.json.gz not found. Run: just download-lexemes" && exit 1)
-    poetry run python -m src.cli import data/latest-lexemes.json.gz --resume
+    @test -f "$$(ls -t data/lexemes-*.json.gz 2>/dev/null | head -1)" || (echo "ERROR: No lexemes dump found. Run: just download-lexemes" && exit 1)
+    poetry run python -m src.cli import "$$(ls -t data/lexemes-*.json.gz | head -1)" --resume
 
 # Resume interrupted item import
 resume-items:
-    test -f data/latest-all.json.gz || (echo "ERROR: data/latest-all.json.gz not found. Run: just download-items" && exit 1)
-    poetry run python -m src.cli import data/latest-all.json.gz --resume
+    @test -f "$$(ls -t data/items-*.json.gz 2>/dev/null | head -1)" || (echo "ERROR: No items dump found. Run: just download-items" && exit 1)
+    poetry run python -m src.cli import "$$(ls -t data/items-*.json.gz | head -1)" --resume
 
 # Full workflow: download and import lexemes
 lexemes: download-lexemes import-lexemes

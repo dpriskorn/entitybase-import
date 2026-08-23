@@ -167,6 +167,7 @@ DUMP_FILES = {
 def download_dump(args):
     """Download a Wikidata dump file with progress tracking."""
     import time
+    from datetime import date
 
     dump_type = args.dump_type
     if dump_type not in DUMP_FILES:
@@ -174,25 +175,21 @@ def download_dump(args):
         sys.exit(1)
 
     compression = "json_gz" if args.gz else "json_bz2"
-    filename = DUMP_FILES[dump_type][compression]
-    url = f"{WIKIDATA_DUMPS_BASE}/{filename}"
+    remote_filename = DUMP_FILES[dump_type][compression]
+    url = f"{WIKIDATA_DUMPS_BASE}/{remote_filename}"
 
     if args.output:
         output_path = args.output
     else:
         data_dir = Path("data")
         data_dir.mkdir(exist_ok=True)
-        output_path = data_dir / filename
+        today = date.today().isoformat()
+        local_filename = f"{dump_type}-{today}.json.gz"
+        output_path = data_dir / local_filename
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if output_path.exists() and not args.force:
-        response = input(f"File {output_path} already exists. Overwrite? [y/N]: ").strip().lower()
-        if response not in ("y", "yes"):
-            print("Aborted.")
-            sys.exit(1)
-
-    print(f"Downloading {filename} from {url}")
+    print(f"Downloading {remote_filename} from {url}")
     print(f"Output: {output_path}")
     print()
 
