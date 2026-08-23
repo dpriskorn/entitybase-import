@@ -379,6 +379,7 @@ async def import_from_jsonl(
         to_line: Stop importing at line number (1-indexed)
         resume: Resume last interrupted run for this file
     """
+    jsonl_path = Path(jsonl_path)
     from src.state_manager import ImportStateManager
 
     run_id_for_log = 0
