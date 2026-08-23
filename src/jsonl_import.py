@@ -548,37 +548,42 @@ async def import_from_jsonl(
         print()
 
     # Step 3: Load entities into database
-    print("[3/4] Loading entities into database...")
-    batch_size = 10_000
-    batch = []
-    loaded_count = 0
-    start_load = time.time()
-    last_report = start_load
+    existing_count = state_manager.get_entity_count_for_run(run_id)
+    if existing_count > 0:
+        print(f"[3/4] Skipping - {existing_count:,} entities already in database")
+        loaded_count = existing_count
+    else:
+        print("[3/4] Loading entities into database...")
+        batch_size = 10_000
+        batch = []
+        loaded_count = 0
+        start_load = time.time()
+        last_report = start_load
 
-    for line_num, entity in iter_wikidata_json(jsonl_path, from_line, to_line):
-        if resume and line_num in skip_lines:
-            continue
+        for line_num, entity in iter_wikidata_json(jsonl_path, from_line, to_line):
+            if resume and line_num in skip_lines:
+                continue
 
-        batch.append((line_num, entity))
-        loaded_count += 1
+            batch.append((line_num, entity))
+            loaded_count += 1
 
-        if len(batch) >= batch_size:
+            if len(batch) >= batch_size:
+                state_manager.add_entities(run_id, batch)
+                now = time.time()
+                elapsed = now - start_load
+                rate = loaded_count / elapsed if elapsed > 0 else 0
+                remaining = (entity_count - loaded_count) / rate if rate > 0 else 0
+                elapsed_str = format_elapsed(elapsed)
+                eta_str = format_elapsed(remaining) if remaining > 0 else "N/A"
+                print(f"  Loaded {loaded_count:>10,} / {entity_count:,} | {rate:,.0f}/s | {elapsed_str} elapsed | ETA: {eta_str}", end="\r")
+                batch = []
+
+        # Load remaining entities
+        if batch:
             state_manager.add_entities(run_id, batch)
-            now = time.time()
-            elapsed = now - start_load
-            rate = loaded_count / elapsed if elapsed > 0 else 0
-            remaining = (entity_count - loaded_count) / rate if rate > 0 else 0
-            elapsed_str = format_elapsed(elapsed)
-            eta_str = format_elapsed(remaining) if remaining > 0 else "N/A"
-            print(f"  Loaded {loaded_count:>10,} / {entity_count:,} | {rate:,.0f}/s | {elapsed_str} elapsed | ETA: {eta_str}", end="\r")
-            batch = []
 
-    # Load remaining entities
-    if batch:
-        state_manager.add_entities(run_id, batch)
-
-    elapsed = time.time() - start_load
-    print(f"[3/4] Loaded {loaded_count:,} entities in {format_elapsed(elapsed)}" + " " * 40)
+        elapsed = time.time() - start_load
+        print(f"[3/4] Loaded {loaded_count:,} entities in {format_elapsed(elapsed)}" + " " * 40)
     print()
 
     # Step 4: Import entities to API

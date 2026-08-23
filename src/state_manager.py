@@ -126,6 +126,14 @@ class ImportStateManager:
             """, (success_count, fail_count, skip_count, run_id))
             conn.commit()
 
+    def get_entity_count_for_run(self, run_id: int) -> int:
+        """Get count of entities loaded for a run."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT COUNT(*) FROM entities WHERE run_id = ?
+            """, (run_id,))
+            return cursor.fetchone()[0]
+
     def add_entities(self, run_id: int, entities_with_lines: List[tuple]):
         """Bulk add entities in pending state.
 
