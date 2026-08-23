@@ -66,11 +66,32 @@ sudo systemctl restart mariadb
 #### Before Import
 
 ```bash
+# Disable checks + drop foreign keys and indexes
 sudo mariadb entitybase -e "
 SET GLOBAL foreign_key_checks = 0;
 SET GLOBAL unique_checks = 0;
 SET GLOBAL autocommit = 0;
-SELECT 'Checks disabled, ready for import' AS status;
+
+-- Drop foreign keys FIRST (indexes used by FKs cannot be dropped until FK is removed)
+ALTER TABLE entity_backlinks DROP FOREIGN KEY entity_backlinks_ibfk_1;
+ALTER TABLE entity_backlinks DROP FOREIGN KEY entity_backlinks_ibfk_2;
+ALTER TABLE entity_backlinks DROP FOREIGN KEY entity_backlinks_ibfk_3;
+
+-- Now drop secondary indexes
+ALTER TABLE entity_backlinks DROP INDEX idx_backlinks_property;
+ALTER TABLE metadata_content DROP INDEX idx_type_hash;
+ALTER TABLE metadata_content DROP INDEX idx_ref_count;
+ALTER TABLE lexeme_terms DROP INDEX idx_entity;
+ALTER TABLE lexeme_terms DROP INDEX idx_hash;
+ALTER TABLE lexeme_terms DROP INDEX idx_language;
+ALTER TABLE statements DROP INDEX idx_ref_count;
+ALTER TABLE qualifiers DROP INDEX idx_ref_count;
+ALTER TABLE refs DROP INDEX idx_ref_count;
+ALTER TABLE snaks DROP INDEX idx_ref_count;
+ALTER TABLE sitelinks DROP INDEX idx_ref_count;
+ALTER TABLE entity_terms DROP INDEX idx_ref_count;
+
+SELECT 'Checks disabled, FKs and indexes dropped' AS status;
 "
 ```
 
@@ -84,11 +105,33 @@ just import-lexemes
 #### After Import
 
 ```bash
+# Recreate foreign keys and indexes + re-enable checks
 sudo mariadb entitybase -e "
+-- Recreate foreign keys
+ALTER TABLE entity_backlinks ADD FOREIGN KEY (referenced_internal_id) REFERENCES entity_id_mapping(internal_id);
+ALTER TABLE entity_backlinks ADD FOREIGN KEY (referencing_internal_id) REFERENCES entity_id_mapping(internal_id);
+ALTER TABLE entity_backlinks ADD FOREIGN KEY (statement_hash) REFERENCES statement_content(content_hash);
+
+-- Recreate secondary indexes
+ALTER TABLE metadata_content ADD INDEX idx_type_hash (content_type, content_hash);
+ALTER TABLE metadata_content ADD INDEX idx_ref_count (ref_count DESC);
+ALTER TABLE lexeme_terms ADD INDEX idx_entity (entity_id);
+ALTER TABLE lexeme_terms ADD INDEX idx_hash (term_hash);
+ALTER TABLE lexeme_terms ADD INDEX idx_language (language);
+ALTER TABLE entity_backlinks ADD INDEX idx_backlinks_property (referencing_internal_id, property_id);
+ALTER TABLE statements ADD INDEX idx_ref_count (ref_count DESC);
+ALTER TABLE qualifiers ADD INDEX idx_ref_count (ref_count DESC);
+ALTER TABLE refs ADD INDEX idx_ref_count (ref_count DESC);
+ALTER TABLE snaks ADD INDEX idx_ref_count (ref_count DESC);
+ALTER TABLE sitelinks ADD INDEX idx_ref_count (ref_count DESC);
+ALTER TABLE entity_terms ADD INDEX idx_ref_count (ref_count DESC);
+
+-- Re-enable checks
 SET GLOBAL foreign_key_checks = 1;
 SET GLOBAL unique_checks = 1;
 SET GLOBAL autocommit = 1;
-SELECT 'Checks re-enabled' AS status;
+
+SELECT 'Indexes and FKs recreated, checks re-enabled' AS status;
 "
 ```
 
