@@ -37,20 +37,30 @@ download-lexemes:
 download-items:
     poetry run python -m src.cli download-dump items
 
+# Ensure lexeme dump is downloaded (skip if exists)
+[private]
+ensure-lexemes:
+    @if [ ! -f data/latest-lexemes.json.gz ]; then just download-lexemes; else echo "Using existing data/latest-lexemes.json.gz"; fi
+
+# Ensure items dump is downloaded (skip if exists)
+[private]
+ensure-items:
+    @if [ ! -f data/latest-all.json.gz ]; then just download-items; else echo "Using existing data/latest-all.json.gz"; fi
+
 # Import all Wikidata lexemes
-import-lexemes: download-lexemes
+import-lexemes: ensure-lexemes
     poetry run python -m src.cli import data/latest-lexemes.json.gz
 
 # Import all Wikidata lexemes with custom concurrency
-import-lexemes-fast concurrency="100": download-lexemes
+import-lexemes-fast concurrency="100": ensure-lexemes
     poetry run python -m src.cli import data/latest-lexemes.json.gz -c {{concurrency}}
 
 # Import all Wikidata items (WARNING: very large, takes days)
-import-items: download-items
+import-items: ensure-items
     poetry run python -m src.cli import data/latest-all.json.gz
 
 # Import all Wikidata items with custom concurrency
-import-items-fast concurrency="100": download-items
+import-items-fast concurrency="100": ensure-items
     poetry run python -m src.cli import data/latest-all.json.gz -c {{concurrency}}
 
 # Resume interrupted lexeme import
