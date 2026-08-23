@@ -152,14 +152,6 @@ Buffer for bulk INSERT operations. 256M recommended for large imports.
 
 ### Drop indexes before import, recreate after
 
-If importing a fresh database, you can drop secondary indexes on large tables before import and recreate them after. This can speed up import by 2-5x.
-
-### Use LOAD DATA INFILE
-
-For maximum speed, convert JSONL to CSV and use LOAD DATA INFILE. It's 10-20x faster than INSERT statements.
-
-### Monitor during import
-
 ```bash
 sudo mariadb -e "
 SHOW PROCESSLIST;
