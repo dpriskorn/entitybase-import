@@ -141,8 +141,6 @@ class ProgressTracker:
             rate_per_second = self.processed / elapsed
             rate_per_minute = rate_per_second * 60
             rate_per_hour = rate_per_second * 3600
-
-            batch_size / batch_elapsed if batch_elapsed > 0 else 0
         else:
             pass
 
@@ -458,20 +456,19 @@ async def import_from_jsonl(
         print(f"Line range:  {from_line or 1} - {to_line or 'end'}")
     print()
     print("Steps:")
-    print("  [1/4] Wait for API to be ready")
-    print("  [2/4] Count entities in file")
-    print("  [3/4] Load entities into database")
-    print("  [4/4] Import entities to API")
+    print("  [1/3] Wait for API to be ready")
+    print("  [2/3] Count entities in file")
+    print("  [3/3] Import entities to API")
     print()
 
     # Step 1: Wait for API
-    print("[1/4] Waiting for API to be ready...")
+    print("[1/3] Waiting for API to be ready...")
     if not await wait_for_api(api_url):
         logger.error("API not available, aborting import")
         print("ERROR: EntityBase API is not responding.")
         print(f"Waiting timed out after {API_READY_TIMEOUT}s")
         return
-    print("[1/4] API is ready")
+    print("[1/3] API is ready")
     print()
 
     state_manager = ImportStateManager(db_path)
@@ -480,7 +477,7 @@ async def import_from_jsonl(
 
     # Handle --resume: find last incomplete run
     if resume:
-        print("[2/4] Checking previous run...")
+        print("[2/3] Checking previous run...")
         incomplete_run = state_manager.find_incomplete_run(str(jsonl_path))
         if incomplete_run:
             existing_run_id = incomplete_run.run_id
@@ -510,9 +507,9 @@ async def import_from_jsonl(
 
         if cached_count and not from_line and not to_line:
             entity_count = cached_count
-            print(f"[2/4] Using cached count: {entity_count:,} entities ({file_size:,} bytes)")
+            print(f"[2/3] Using cached count: {entity_count:,} entities ({file_size:,} bytes)")
         else:
-            print("[2/4] Counting entities in file...")
+            print("[2/3] Counting entities in file...")
             entity_count = 0
             start_count = time.time()
             last_report = start_count
@@ -549,112 +546,106 @@ async def import_from_jsonl(
             api_url=f"{api_url}"
         )
         run_id_for_log = run_id
-        print(f"[2/4] Found {entity_count:,} entities (run #{run_id})")
+        print(f"[2/3] Found {entity_count:,} entities (run #{run_id})")
         print()
 
-    # Step 3: Load entities into database
-    existing_count = state_manager.get_entity_count_for_run(run_id)
-    if existing_count >= entity_count:
-        print(f"[3/4] Skipping - all {existing_count:,} entities already in {db_path}")
-        loaded_count = existing_count
-    else:
-        skip_loaded = state_manager.get_loaded_line_numbers(run_id) if existing_count > 0 else set()
-        if existing_count > 0:
-            print(f"[3/4] Loading entities into {db_path} ({existing_count:,} already loaded, {entity_count - existing_count:,} remaining)...")
-        else:
-            print(f"[3/4] Loading entities into {db_path}...")
-        batch_size = 10_000
-        batch = []
-        loaded_count = existing_count
-        start_load = time.time()
-        last_report = start_load
+    # Step 3: Import entities directly from file
+    print("[3/3] Importing entities to API...")
 
-        for line_num, entity in iter_wikidata_json(jsonl_path, from_line, to_line):
-            if line_num in skip_loaded:
-                continue
+    # Get already-imported line numbers for resume
+    skip_lines = state_manager.get_imported_line_numbers(run_id) if resume else set()
+    if skip_lines:
+        print(f"  Resuming: {len(skip_lines):,} entities already imported")
 
-            batch.append((line_num, entity))
-            loaded_count += 1
-
-            if len(batch) >= batch_size:
-                state_manager.add_entities(run_id, batch)
-                now = time.time()
-                elapsed = now - start_load
-                rate = (loaded_count - existing_count) / elapsed if elapsed > 0 else 0
-                remaining_new = (entity_count - existing_count) - (loaded_count - existing_count)
-                remaining = remaining_new / rate if rate > 0 else 0
-                elapsed_str = format_elapsed(elapsed)
-                eta_str = format_elapsed(remaining) if remaining > 0 else "N/A"
-                print(f"  Loaded {loaded_count:>10,} / {entity_count:,} | {rate:,.0f}/s | {elapsed_str} elapsed | ETA: {eta_str}", end="\r")
-                batch = []
-
-        # Load remaining entities
-        if batch:
-            state_manager.add_entities(run_id, batch)
-
-        elapsed = time.time() - start_load
-        print(f"[3/4] Loaded {loaded_count:,} entities in {format_elapsed(elapsed)}" + " " * 40)
-    print()
-
-    # Step 4: Import entities to API
-    print("[4/4] Importing entities to API...")
-    tracker = ProgressTracker(total=loaded_count)
+    tracker = ProgressTracker(total=entity_count)
+    tracker.processed = skip_count  # Already imported before
     success_count = 0
     fail_count = 0
-    skip_count = 0
+    skip_count = len(skip_lines)
+    imported_count = 0
+    start_import = time.time()
+    last_report = start_import
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, limits=LIMITS) as session:
-        batch_num = 0
-        while True:
-            batch = state_manager.get_next_batch(run_id, limit=concurrency)
+        batch = []
+        batch_line_nums = []
 
-            if not batch:
-                print()
-                print("=" * 70)
-                print("[4/4] IMPORT COMPLETE")
-                print("=" * 70)
-                break
+        for line_num, entity in iter_wikidata_json(jsonl_path, from_line, to_line):
+            if line_num in skip_lines:
+                continue
 
-            batch_num += 1
-            progress = tracker.update(len(batch))
+            batch.append(entity)
+            batch_line_nums.append(line_num)
 
-            if batch_num % progress_interval == 0 or batch_num == 1:
-                print_progress_detailed(batch_num, progress)
-            else:
-                print_progress_compact(batch_num, progress)
+            if len(batch) >= concurrency:
+                results = await asyncio.gather(*[
+                    import_entity(
+                        session,
+                        e['id'],
+                        e,
+                        e.get('type', 'item'),
+                        state_manager,
+                        run_id,
+                        api_url
+                    )
+                    for e in batch
+                ])
 
-            tasks = [
+                for result, ln in zip(results, batch_line_nums):
+                    if result == 'success':
+                        success_count += 1
+                    elif result == 'skip':
+                        skip_count += 1
+                    else:
+                        fail_count += 1
+                    imported_count += 1
+
+                batch = []
+                batch_line_nums = []
+
+                now = time.time()
+                if imported_count % 500 == 0 or now - last_report >= 2.0:
+                    elapsed = now - start_import
+                    rate = imported_count / elapsed if elapsed > 0 else 0
+                    remaining = (entity_count - skip_count - imported_count) / rate if rate > 0 else 0
+                    done = imported_count + skip_count
+                    percent = (done / entity_count * 100) if entity_count > 0 else 0
+                    print(f"  {percent:>5.1f}% | {done:>10,} / {entity_count:,} | {rate:,.0f}/s | ETA: {format_elapsed(remaining)}", end="\r")
+                    last_report = now
+
+        # Import remaining batch
+        if batch:
+            results = await asyncio.gather(*[
                 import_entity(
                     session,
-                    record.entity_id,
-                    json.loads(record.entity_data) if record.entity_data else {},
-                    record.entity_type,
+                    e['id'],
+                    e,
+                    e.get('type', 'item'),
                     state_manager,
                     run_id,
                     api_url
                 )
-                for record in batch
-            ]
-            results = await asyncio.gather(*tasks)
-
+                for e in batch
+            ])
             for result in results:
-                if result == 'skip':
-                    skip_count += 1
-                elif result == 'success':
+                if result == 'success':
                     success_count += 1
+                elif result == 'skip':
+                    skip_count += 1
                 else:
                     fail_count += 1
-
-            if batch_num % 10 == 0:
-                state_manager.finish_run(run_id, success_count, fail_count, skip_count)
+                imported_count += 1
 
     state_manager.finish_run(run_id, success_count, fail_count, skip_count)
 
-    tracker.update(0)
-    elapsed = tracker.elapsed_seconds
+    elapsed = time.time() - start_import
     elapsed_formatted = format_elapsed(elapsed)
-    rate_per_sec = tracker.rate_per_second
-    print(f"\nTotal:        {loaded_count:,}")
+    rate_per_sec = imported_count / elapsed if elapsed > 0 else 0
+    print()
+    print("=" * 70)
+    print("[3/3] IMPORT COMPLETE")
+    print("=" * 70)
+    print(f"Total:        {entity_count:,}")
     print(f"Success:      {success_count:,}")
     print(f"Failed:       {fail_count:,}")
     print(f"Skipped:      {skip_count:,}")

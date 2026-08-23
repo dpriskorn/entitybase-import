@@ -13,7 +13,6 @@ class EntityRecord(BaseModel):
     entity_id: str
     entity_type: str
     status: str
-    entity_data: str = ""
     line_number: int
     run_id: int
     last_attempt: str
@@ -75,7 +74,6 @@ class ImportStateManager:
                     entity_id TEXT NOT NULL,
                     entity_type TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'pending',
-                    entity_data TEXT,
                     line_number INTEGER,
                     run_id INTEGER,
                     last_attempt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -149,14 +147,13 @@ class ImportStateManager:
             run_id: The import run ID
             entities_with_lines: List of (line_number, entity_dict) tuples
         """
-        import json
         with self._get_connection() as conn:
             conn.executemany("""
                 INSERT OR REPLACE INTO entities
-                (entity_id, entity_type, status, entity_data, line_number, run_id)
-                VALUES (?, ?, 'pending', ?, ?, ?)
+                (entity_id, entity_type, status, line_number, run_id)
+                VALUES (?, ?, 'pending', ?, ?)
             """, [
-                (e['id'], e.get('type', 'item'), json.dumps(e), line_num, run_id)
+                (e['id'], e.get('type', 'item'), line_num, run_id)
                 for line_num, e in entities_with_lines
             ])
             conn.commit()
@@ -185,7 +182,7 @@ class ImportStateManager:
             conn.commit()
 
             cursor = conn.execute("""
-                SELECT entity_id, entity_type, status, entity_data, line_number, run_id,
+                SELECT entity_id, entity_type, status, line_number, run_id,
                        last_attempt, retry_count, error_message
                 FROM entities
                 WHERE run_id = ? AND status = 'processing'
@@ -196,12 +193,11 @@ class ImportStateManager:
                 entity_id=row[0],
                 entity_type=row[1],
                 status=row[2],
-                entity_data=row[3] or "",
-                line_number=row[4],
-                run_id=row[5],
-                last_attempt=row[6],
-                retry_count=row[7],
-                error_message=row[8] or ""
+                line_number=row[3],
+                run_id=row[4],
+                last_attempt=row[5],
+                retry_count=row[6],
+                error_message=row[7] or ""
             ) for row in rows]
 
     def mark_success(self, entity_id: str, run_id: int):
