@@ -435,6 +435,15 @@ async def import_from_jsonl(
     logger.info(f"Log level: {log_level}")
     logger.debug(f"Command line arguments: {sys.argv}")
 
+    if not jsonl_path.exists():
+        print(f"\nERROR: File not found: {jsonl_path}")
+        print("Download the dump first:")
+        if "lexemes" in str(jsonl_path):
+            print("  python -m src.cli download-dump lexemes")
+        elif "all" in str(jsonl_path):
+            print("  python -m src.cli download-dump items")
+        return
+
     if not await wait_for_api(api_url):
         logger.error("API not available, aborting import")
         print("\nERROR: EntityBase API is not responding. Please ensure the API is running.")

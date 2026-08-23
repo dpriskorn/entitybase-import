@@ -38,27 +38,29 @@ download-items:
     poetry run python -m src.cli download-dump items
 
 # Import all Wikidata lexemes
-import-lexemes:
+import-lexemes: download-lexemes
     poetry run python -m src.cli import data/latest-lexemes.json.gz
 
 # Import all Wikidata lexemes with custom concurrency
-import-lexemes-fast concurrency="100":
+import-lexemes-fast concurrency="100": download-lexemes
     poetry run python -m src.cli import data/latest-lexemes.json.gz -c {{concurrency}}
 
 # Import all Wikidata items (WARNING: very large, takes days)
-import-items:
+import-items: download-items
     poetry run python -m src.cli import data/latest-all.json.gz
 
 # Import all Wikidata items with custom concurrency
-import-items-fast concurrency="100":
+import-items-fast concurrency="100": download-items
     poetry run python -m src.cli import data/latest-all.json.gz -c {{concurrency}}
 
 # Resume interrupted lexeme import
 resume-lexemes:
+    test -f data/latest-lexemes.json.gz || (echo "ERROR: data/latest-lexemes.json.gz not found. Run: just download-lexemes" && exit 1)
     poetry run python -m src.cli import data/latest-lexemes.json.gz --resume
 
 # Resume interrupted item import
 resume-items:
+    test -f data/latest-all.json.gz || (echo "ERROR: data/latest-all.json.gz not found. Run: just download-items" && exit 1)
     poetry run python -m src.cli import data/latest-all.json.gz --resume
 
 # Full workflow: download and import lexemes
