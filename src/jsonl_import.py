@@ -16,7 +16,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Configuration
-DEFAULT_CONCURRENCY = 50
+DEFAULT_CONCURRENCY = 20
 DEFAULT_PROGRESS_INTERVAL = 10
 DEFAULT_API_URL = "http://localhost:8083/v1/import"
 DB_PATH = "import_state.db"

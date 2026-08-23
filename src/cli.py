@@ -329,7 +329,7 @@ def main():
 
     import_parser = subparsers.add_parser('import', help='Import entities from JSONL or Wikidata JSON dump file')
     import_parser.add_argument('jsonl_file', help='Path to JSONL or Wikidata JSON dump file (.json or .json.gz)')
-    import_parser.add_argument('--concurrency', '-c', type=int, default=50, help='Number of parallel imports')
+    import_parser.add_argument('--concurrency', '-c', type=int, default=20, help='Number of parallel imports')
     import_parser.add_argument('--progress-interval', '-p', type=int, default=10, help='Show progress every N batches')
     import_parser.add_argument('--host', default='localhost', help='EntityBase API host')
     import_parser.add_argument('--port', type=int, default=8083, help='EntityBase API port')
