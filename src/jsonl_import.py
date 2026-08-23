@@ -436,6 +436,9 @@ async def import_from_jsonl(
     logger.info(f"Log level: {log_level}")
     logger.debug(f"Command line arguments: {sys.argv}")
 
+    # Force line buffering so output appears immediately in Docker/CI
+    sys.stdout.reconfigure(line_buffering=True)
+
     if not jsonl_path.exists():
         print(f"\nERROR: File not found: {jsonl_path}")
         print("Download the dump first:")
@@ -477,6 +480,7 @@ async def import_from_jsonl(
 
     # Handle --resume: find last incomplete run
     if resume:
+        print("[2/4] Checking previous run...")
         incomplete_run = state_manager.find_incomplete_run(str(jsonl_path))
         if incomplete_run:
             existing_run_id = incomplete_run.run_id
