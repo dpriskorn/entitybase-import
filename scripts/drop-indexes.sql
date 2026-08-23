@@ -6,9 +6,9 @@ SET GLOBAL unique_checks = 0;
 SET GLOBAL autocommit = 0;
 
 -- Drop foreign keys FIRST (indexes used by FKs cannot be dropped until FK is removed)
-ALTER TABLE entity_backlinks DROP FOREIGN KEY entity_backlinks_ibfk_1;
-ALTER TABLE entity_backlinks DROP FOREIGN KEY entity_backlinks_ibfk_2;
-ALTER TABLE entity_backlinks DROP FOREIGN KEY entity_backlinks_ibfk_3;
+ALTER TABLE entity_backlinks DROP FOREIGN KEY `1`;
+ALTER TABLE entity_backlinks DROP FOREIGN KEY `2`;
+ALTER TABLE entity_backlinks DROP FOREIGN KEY `3`;
 
 -- Now drop secondary indexes
 ALTER TABLE entity_backlinks DROP INDEX idx_backlinks_property;
