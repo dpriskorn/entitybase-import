@@ -134,6 +134,14 @@ class ImportStateManager:
             """, (run_id,))
             return cursor.fetchone()[0]
 
+    def get_loaded_line_numbers(self, run_id: int) -> set:
+        """Get set of line numbers already loaded into database for a run."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT line_number FROM entities WHERE run_id = ?
+            """, (run_id,))
+            return {row[0] for row in cursor.fetchall()}
+
     def add_entities(self, run_id: int, entities_with_lines: List[tuple]):
         """Bulk add entities in pending state.
 
