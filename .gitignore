@@ -42,3 +42,4 @@ dist/
 build/
 *.egg-info/
 import_state.db*
+data/
