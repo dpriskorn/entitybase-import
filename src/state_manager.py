@@ -89,6 +89,14 @@ class ImportStateManager:
                 CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(entity_type);
                 CREATE INDEX IF NOT EXISTS idx_entities_run_id ON entities(run_id);
                 CREATE INDEX IF NOT EXISTS idx_entities_last_attempt ON entities(last_attempt);
+
+                CREATE TABLE IF NOT EXISTS file_counts (
+                    file_path TEXT NOT NULL,
+                    file_size INTEGER NOT NULL,
+                    entity_count INTEGER NOT NULL,
+                    counted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_path, file_size)
+                );
             """)
 
     def create_run(self, jsonl_file: str, total_entities: int,
@@ -260,6 +268,26 @@ class ImportStateManager:
         with self._get_connection() as conn:
             conn.execute("DELETE FROM entities")
             conn.execute("DELETE FROM import_runs")
+            conn.commit()
+
+    def get_cached_count(self, file_path: str, file_size: int) -> Optional[int]:
+        """Get cached entity count for a file. Returns None if not cached."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT entity_count FROM file_counts
+                WHERE file_path = ? AND file_size = ?
+            """, (file_path, file_size))
+            row = cursor.fetchone()
+            return row[0] if row else None
+
+    def store_count(self, file_path: str, file_size: int, entity_count: int):
+        """Store entity count for a file."""
+        with self._get_connection() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO file_counts
+                (file_path, file_size, entity_count, counted_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            """, (file_path, file_size, entity_count))
             conn.commit()
 
     def find_incomplete_run(self, jsonl_file: str) -> Optional[ImportRun]:

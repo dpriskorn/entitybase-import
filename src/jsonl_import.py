@@ -480,15 +480,37 @@ async def import_from_jsonl(
             resume = False
 
     if not resume:
-        # First pass: count entities for progress tracking
-        print("\nCounting entities in file...")
-        entity_count = 0
-        for line_num, _ in iter_wikidata_json(jsonl_path, from_line, to_line):
-            entity_count += 1
-            if entity_count % 1_000_000 == 0:
-                print(f"  Counted {entity_count:,} entities...")
+        file_size = jsonl_path.stat().st_size
+        cached_count = state_manager.get_cached_count(str(jsonl_path), file_size)
 
-        print(f"Found {entity_count:,} entities in file")
+        if cached_count and not from_line and not to_line:
+            entity_count = cached_count
+            print(f"\nUsing cached count: {entity_count:,} entities ({file_size:,} bytes)")
+        else:
+            print("\nCounting entities in file...")
+            entity_count = 0
+            start_count = time.time()
+            last_report = start_count
+
+            for line_num, _ in iter_wikidata_json(jsonl_path, from_line, to_line):
+                entity_count += 1
+                now = time.time()
+
+                if entity_count % 100_000 == 0 or now - last_report >= 2.0:
+                    elapsed = now - start_count
+                    rate = entity_count / elapsed if elapsed > 0 else 0
+                    elapsed_str = format_elapsed(elapsed)
+                    print(f"  Counted {entity_count:>10,} entities | {rate:,.0f}/s | {elapsed_str}", end="\r")
+                    last_report = now
+
+            elapsed = time.time() - start_count
+            elapsed_str = format_elapsed(elapsed)
+            print(f"  Counted {entity_count:>10,} entities | {elapsed_str}" + " " * 20)
+
+            if not from_line and not to_line:
+                state_manager.store_count(str(jsonl_path), file_size, entity_count)
+                print(f"  Cached count for future imports")
+
         if from_line or to_line:
             print(f"Line range: {from_line or 1} - {to_line or 'end'}")
 
