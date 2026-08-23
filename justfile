@@ -100,3 +100,35 @@ download-random-items count="100":
 # Import a JSONL file
 import jsonl_file:
     poetry run python -m src.cli import {{jsonl_file}}
+
+# Show MariaDB tuning recommendations
+mariadb-tuning:
+    @echo "=== MariaDB Bulk Import Tuning ==="
+    @echo ""
+    @echo "1. Create config file:"
+    @echo "   sudo tee /etc/my.cnf.d/bulk-import.cnf << 'EOF'"
+    @echo "   [mysqld]"
+    @echo "   innodb_buffer_pool_size = 6G"
+    @echo "   innodb_log_file_size = 1G"
+    @echo "   innodb_log_buffer_size = 64M"
+    @echo "   innodb_flush_log_at_trx_commit = 2"
+    @echo "   innodb_flush_method = O_DIRECT"
+    @echo "   innodb_io_capacity = 200"
+    @echo "   bulk_insert_buffer_size = 256M"
+    @echo "   innodb_autoinc_lock_mode = 2"
+    @echo "   sort_buffer_size = 4M"
+    @echo "   join_buffer_size = 4M"
+    @echo "   tmp_table_size = 256M"
+    @echo "   max_heap_table_size = 256M"
+    @echo "   thread_cache_size = 16"
+    @echo "   table_open_cache = 4096"
+    @echo "   max_allowed_packet = 64M"
+    @echo "   EOF"
+    @echo ""
+    @echo "2. Restart MariaDB:  sudo systemctl restart mariadb"
+    @echo "3. Disable checks:   sudo mariadb entitybase -e \"SET GLOBAL foreign_key_checks=0; SET GLOBAL unique_checks=0; SET GLOBAL autocommit=0;\""
+    @echo "4. Run import:       just import-lexemes"
+    @echo "5. Re-enable checks: sudo mariadb entitybase -e \"SET GLOBAL foreign_key_checks=1; SET GLOBAL unique_checks=1; SET GLOBAL autocommit=1;\""
+    @echo "6. Cleanup:          sudo rm /etc/my.cnf.d/bulk-import.cnf && sudo systemctl restart mariadb"
+    @echo ""
+    @echo "See BULK_IMPORT_RECOMMENDATIONS.md for details"
