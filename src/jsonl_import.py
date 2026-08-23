@@ -554,14 +554,14 @@ async def import_from_jsonl(
     # Step 3: Load entities into database
     existing_count = state_manager.get_entity_count_for_run(run_id)
     if existing_count >= entity_count:
-        print(f"[3/4] Skipping - all {existing_count:,} entities already in database")
+        print(f"[3/4] Skipping - all {existing_count:,} entities already in {db_path}")
         loaded_count = existing_count
     else:
         skip_loaded = state_manager.get_loaded_line_numbers(run_id) if existing_count > 0 else set()
         if existing_count > 0:
-            print(f"[3/4] Loading entities into database ({existing_count:,} already loaded, {entity_count - existing_count:,} remaining)...")
+            print(f"[3/4] Loading entities into {db_path} ({existing_count:,} already loaded, {entity_count - existing_count:,} remaining)...")
         else:
-            print("[3/4] Loading entities into database...")
+            print(f"[3/4] Loading entities into {db_path}...")
         batch_size = 10_000
         batch = []
         loaded_count = existing_count
