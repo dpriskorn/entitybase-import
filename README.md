@@ -1,6 +1,6 @@
 # entitybase-import
 
-A command-line tool for importing entities into the EntityBase API from JSONL files.
+A command-line tool for importing entities into the EntityBase API from JSONL files and Wikidata dumps.
 
 ## Architecture
 
@@ -23,6 +23,9 @@ flowchart LR
 ## Features
 
 - **Unified CLI**: Single entry point for import and state management
+- **Wikidata Dump Import**: Download and import full Wikidata dumps (lexemes, items)
+- **Gzip Support**: Transparently handles .json.gz compressed files
+- **Streaming Import**: Processes entities in batches - no memory issues with billion-scale datasets
 - **Parallel Processing**: Configurable concurrency for faster imports
 - **Resume Capability**: SQLite-based state management to track progress and resume interrupted imports
 - **Retry Logic**: Automatic retry with exponential backoff for failed imports
@@ -47,26 +50,31 @@ make setup
 # Show help
 python -m src.cli help
 
-# Download Wikidata entities
+# Download a full Wikidata dump
+python -m src.cli download-dump lexemes
+python -m src.cli download-dump items
+
+# Import a Wikidata dump
+python -m src.cli import data/latest-lexemes.json.gz
+
+# Resume an interrupted import
+python -m src.cli import data/latest-lexemes.json.gz --resume
+
+# Download specific entities
 python -m src.cli download -o data.jsonl Q42 P31
 python -m src.cli download -o data.jsonl --random-items 100
 
-# Import entities
+# Import a JSONL file
 python -m src.cli import data/entities.jsonl
-
-# With custom concurrency and API URL
-python -m src.cli import data/entities.jsonl -c 20 --host api.example.com
-
-# Import specific line range
-python -m src.cli import data/entities.jsonl --from 1000 --to 2000
 ```
 
 ## CLI Commands
 
 | Command | Description |
 |---------|-------------|
-| `import` | Import entities from JSONL file |
-| `download` | Download Wikidata entities to JSONL |
+| `import` | Import entities from JSONL or Wikidata JSON dump file |
+| `download` | Download specific Wikidata entities to JSONL |
+| `download-dump` | Download full Wikidata dump (lexemes or items) |
 | `status` | Show current import status |
 | `list` | List entities (with filters) |
 | `stats` | Show overall statistics |
@@ -108,31 +116,39 @@ python -m src.cli reset
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `jsonl_file` | Required | Path to JSONL file to import |
-| `--concurrency, -c` | 10 | Number of parallel imports |
+| `jsonl_file` | Required | Path to JSONL or Wikidata JSON dump file (.json or .json.gz) |
+| `--concurrency, -c` | 50 | Number of parallel imports |
 | `--progress-interval, -p` | 10 | Show progress every N batches |
-| `--api-url` | `http://localhost:8000/v1/entitybase` | API base URL |
+| `--host` | `localhost` | EntityBase API host |
+| `--port` | 8083 | EntityBase API port |
+| `--version` | `v1` | EntityBase API version |
 | `--db-path` | `import_state.db` | Path to SQLite state database |
 | `--cleanup` | False | Prompt to delete database after import |
 | `--auto-cleanup` | False | Automatically delete database (no prompt) |
 | `--log-level` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `--from` | None | Start from line number (1-indexed) |
 | `--to` | None | Stop at line number (1-indexed) |
+| `--resume` | False | Resume last interrupted run for this file |
 
 ## Import Examples
 
 ```bash
-# Basic import (uses default API URL http://localhost:8000/v1/entitybase)
-python -m src.cli import data.jsonl
+# Import all Wikidata lexemes
+python -m src.cli download-dump lexemes
+python -m src.cli import data/latest-lexemes.json.gz
+
+# Import all Wikidata items (WARNING: 150GB+ compressed)
+python -m src.cli download-dump items
+python -m src.cli import data/latest-all.json.gz
+
+# Resume an interrupted import
+python -m src.cli import data/latest-lexemes.json.gz --resume
 
 # Import with higher concurrency for faster processing
-python -m src.cli import data.jsonl -c 20
+python -m src.cli import data/latest-lexemes.json.gz -c 100
 
 # Import to a specific API server
-python -m src.cli import data.jsonl --api-url http://api.example.com/v1/entitybase
-
-# Resume an interrupted import (automatically picks up where left off)
-python -m src.cli import data.jsonl
+python -m src.cli import data.jsonl --host api.example.com --port 8083
 
 # Import a specific range of lines
 python -m src.cli import data.jsonl --from 1000 --to 2000
@@ -147,19 +163,9 @@ python -m src.cli import data.jsonl --auto-cleanup
 python -m src.cli import data.jsonl --db-path my_import_state.db
 ```
 
-### Import a large dataset with progress tracking
-
-```bash
-# Import 100k+ entities with high concurrency
-python -m src.cli import large_data.jsonl -c 50 -p 100
-
-# Check progress while running (in another terminal)
-python -m src.cli status
-```
-
 ## Download Command
 
-Download Wikidata entities and save as JSONL for import:
+Download specific Wikidata entities and save as JSONL for import:
 
 ```bash
 # Download specific entities
@@ -188,6 +194,59 @@ python -m src.cli download -o data.jsonl Q123 --append
 | `--append, -a` | False | Append to existing file |
 | `--seed, -s` | None | Random seed for reproducibility |
 | `--verbose, -v` | False | Print verbose output |
+
+## Download Dump Command
+
+Download full Wikidata dumps from Wikimedia. These are large files containing all entities of a given type.
+
+### Available Dumps
+
+| Type | File | Size (compressed) | Description |
+|------|------|-------------------|-------------|
+| `lexemes` | `latest-lexemes.json.gz` | ~600 MB | All Wikidata lexemes (~9M entities) |
+| `items` | `latest-all.json.gz` | ~150 GB | All Wikidata items, properties, lexemes |
+
+### Usage
+
+```bash
+# Download lexeme dump (recommended)
+python -m src.cli download-dump lexemes
+
+# Download all items dump (WARNING: very large file)
+python -m src.cli download-dump items
+
+# Custom output path
+python -m src.cli download-dump lexemes -o /data/dumps/lexemes.json.gz
+
+# Force overwrite existing file
+python -m src.cli download-dump lexemes --force
+
+# Download bz2 instead of gz (smaller file)
+python -m src.cli download-dump lexemes --bz2
+```
+
+### Download Dump Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `dump_type` | Required | `lexemes` or `items` |
+| `--output, -o` | `data/<filename>` | Output file path |
+| `--bz2` | False | Download bz2 compressed instead of gz |
+| `--gz` | True | Download gz compressed (default) |
+| `--force, -f` | False | Overwrite existing file without prompting |
+
+### Importing Dumps
+
+After downloading, import the dump file. The tool automatically handles gzip decompression and the Wikidata JSON array format.
+
+```bash
+# Import all lexemes
+python -m src.cli download-dump lexemes
+python -m src.cli import data/latest-lexemes.json.gz
+
+# Resume interrupted import
+python -m src.cli import data/latest-lexemes.json.gz --resume
+```
 
 ## JSONL Format
 
