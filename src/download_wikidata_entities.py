@@ -150,6 +150,100 @@ def cmd_download(args):
     print(f"Wrote to {output_path}")
 
 
+WIKIDATA_DUMPS_BASE = "https://dumps.wikimedia.org/wikidatawiki/entities"
+
+DUMP_FILES = {
+    "lexemes": {
+        "json_gz": "latest-lexemes.json.gz",
+        "json_bz2": "latest-lexemes.json.bz2",
+    },
+    "items": {
+        "json_gz": "latest-all.json.gz",
+        "json_bz2": "latest-all.json.bz2",
+    },
+}
+
+
+def download_dump(args):
+    """Download a Wikidata dump file with progress tracking."""
+    import time
+
+    dump_type = args.dump_type
+    if dump_type not in DUMP_FILES:
+        print(f"Error: Unknown dump type '{dump_type}'. Choose from: {', '.join(DUMP_FILES.keys())}")
+        sys.exit(1)
+
+    compression = "json_gz" if args.gz else "json_bz2"
+    filename = DUMP_FILES[dump_type][compression]
+    url = f"{WIKIDATA_DUMPS_BASE}/{filename}"
+
+    if args.output:
+        output_path = args.output
+    else:
+        data_dir = Path("data")
+        data_dir.mkdir(exist_ok=True)
+        output_path = data_dir / filename
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_path.exists() and not args.force:
+        response = input(f"File {output_path} already exists. Overwrite? [y/N]: ").strip().lower()
+        if response not in ("y", "yes"):
+            print("Aborted.")
+            sys.exit(1)
+
+    print(f"Downloading {filename} from {url}")
+    print(f"Output: {output_path}")
+    print()
+
+    start_time = time.time()
+    downloaded = 0
+
+    try:
+        import requests
+        response = requests.get(url, stream=True, headers={"User-Agent": USER_AGENT}, timeout=30)
+        response.raise_for_status()
+
+        total_size = int(response.headers.get('content-length', 0))
+        last_report = time.time()
+
+        with open(output_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+
+                    now = time.time()
+                    if now - last_report >= 2.0 or (total_size and downloaded == total_size):
+                        elapsed = now - start_time
+                        rate = downloaded / elapsed if elapsed > 0 else 0
+                        if total_size:
+                            percent = (downloaded / total_size) * 100
+                            mb_done = downloaded / (1024 * 1024)
+                            mb_total = total_size / (1024 * 1024)
+                            speed = rate / (1024 * 1024)
+                            print(f"\r  {mb_done:.1f} / {mb_total:.1f} MB ({percent:.1f}%) | {speed:.1f} MB/s", end="")
+                        else:
+                            mb_done = downloaded / (1024 * 1024)
+                            speed = rate / (1024 * 1024)
+                            print(f"\r  {mb_done:.1f} MB | {speed:.1f} MB/s", end="")
+                        last_report = now
+
+        elapsed = time.time() - start_time
+        speed = downloaded / (1024 * 1024 * elapsed) if elapsed > 0 else 0
+        print(f"\n\nDone! {downloaded / (1024 * 1024):.1f} MB in {elapsed:.1f}s ({speed:.1f} MB/s)")
+        print(f"File: {output_path}")
+
+    except KeyboardInterrupt:
+        print(f"\n\nInterrupted. Partial file saved to {output_path}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n\nError: {e}")
+        if output_path.exists() and downloaded == 0:
+            output_path.unlink()
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Download Wikidata entities and save as JSONL for import"
@@ -206,10 +300,41 @@ def main():
         help="Print verbose output",
     )
 
+    dump_parser = subparsers.add_parser('download-dump', help='Download a full Wikidata dump file')
+    dump_parser.add_argument(
+        "dump_type",
+        choices=["lexemes", "items"],
+        help="Type of dump to download",
+    )
+    dump_parser.add_argument(
+        "--output", "-o",
+        type=Path,
+        default=None,
+        help="Output file path (default: data/<filename>)",
+    )
+    dump_parser.add_argument(
+        "--bz2",
+        action="store_true",
+        help="Download bz2 compressed instead of gz (smaller file)",
+    )
+    dump_parser.add_argument(
+        "--gz",
+        action="store_true",
+        default=True,
+        help="Download gz compressed (default)",
+    )
+    dump_parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="Overwrite existing file without prompting",
+    )
+
     args = parser.parse_args()
 
     if args.command == 'download':
         cmd_download(args)
+    elif args.command == 'download-dump':
+        download_dump(args)
     else:
         parser.print_help()
 

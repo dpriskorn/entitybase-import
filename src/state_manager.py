@@ -118,8 +118,13 @@ class ImportStateManager:
             """, (success_count, fail_count, skip_count, run_id))
             conn.commit()
 
-    def add_entities(self, run_id: int, entities: List[Dict[str, Any]]):
-        """Bulk add entities in pending state."""
+    def add_entities(self, run_id: int, entities_with_lines: List[tuple]):
+        """Bulk add entities in pending state.
+
+        Args:
+            run_id: The import run ID
+            entities_with_lines: List of (line_number, entity_dict) tuples
+        """
         import json
         with self._get_connection() as conn:
             conn.executemany("""
@@ -128,9 +133,18 @@ class ImportStateManager:
                 VALUES (?, ?, 'pending', ?, ?, ?)
             """, [
                 (e['id'], e.get('type', 'item'), json.dumps(e), line_num, run_id)
-                for line_num, e in enumerate(entities, 1)
+                for line_num, e in entities_with_lines
             ])
             conn.commit()
+
+    def get_imported_line_numbers(self, run_id: int) -> set:
+        """Get set of line numbers already successfully imported for a run."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT line_number FROM entities
+                WHERE run_id = ? AND status = 'success'
+            """, (run_id,))
+            return {row[0] for row in cursor.fetchall()}
 
     def get_next_batch(self, run_id: int, limit: int = 10) -> List[EntityRecord]:
         """Get next batch of pending entities."""
@@ -246,4 +260,57 @@ class ImportStateManager:
         with self._get_connection() as conn:
             conn.execute("DELETE FROM entities")
             conn.execute("DELETE FROM import_runs")
+            conn.commit()
+
+    def find_incomplete_run(self, jsonl_file: str) -> Optional[ImportRun]:
+        """Find the last incomplete run for a given file (for --resume)."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM import_runs
+                WHERE jsonl_file = ? AND end_time IS NULL
+                ORDER BY run_id DESC
+                LIMIT 1
+            """, (jsonl_file,))
+            row = cursor.fetchone()
+            return ImportRun(**row) if row else None
+
+    def find_last_run(self, jsonl_file: str) -> Optional[ImportRun]:
+        """Find the last run for a given file."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM import_runs
+                WHERE jsonl_file = ?
+                ORDER BY run_id DESC
+                LIMIT 1
+            """, (jsonl_file,))
+            row = cursor.fetchone()
+            return ImportRun(**row) if row else None
+
+    def get_resume_stats(self, run_id: int) -> Dict[str, Any]:
+        """Get stats for resuming a run - how many done vs remaining."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT status, COUNT(*) as count
+                FROM entities
+                WHERE run_id = ?
+                GROUP BY status
+            """, (run_id,))
+            stats = {row['status']: row['count'] for row in cursor.fetchall()}
+            return {
+                'success': stats.get('success', 0),
+                'failed': stats.get('failed', 0),
+                'skipped': stats.get('skipped', 0),
+                'pending': stats.get('pending', 0),
+                'processing': stats.get('processing', 0),
+                'total': sum(stats.values())
+            }
+
+    def reset_pending_to_failed(self, run_id: int):
+        """Reset processing entities back to pending for retry."""
+        with self._get_connection() as conn:
+            conn.execute("""
+                UPDATE entities
+                SET status = 'pending'
+                WHERE run_id = ? AND status = 'processing'
+            """, (run_id,))
             conn.commit()

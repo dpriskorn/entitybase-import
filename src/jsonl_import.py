@@ -1,6 +1,7 @@
 """Import entities from JSONL file with parallel processing and resume capability."""
 
 import asyncio
+import gzip
 import json
 import logging
 import logging.handlers
@@ -15,7 +16,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Configuration
-DEFAULT_CONCURRENCY = 10
+DEFAULT_CONCURRENCY = 50
 DEFAULT_PROGRESS_INTERVAL = 10
 DEFAULT_API_URL = "http://localhost:8083/v1/import"
 DB_PATH = "import_state.db"
@@ -41,6 +42,48 @@ LIMITS = httpx.Limits(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def open_file(path: Path):
+    """Open a file, transparently handling gzip compression."""
+    if str(path).endswith('.gz'):
+        return gzip.open(path, 'rt', encoding='utf-8')
+    return open(path, 'r', encoding='utf-8')
+
+
+def iter_wikidata_json(path: Path, from_line: Optional[int] = None, to_line: Optional[int] = None):
+    """Iterate over entities in a Wikidata JSON dump file.
+
+    Handles the format: [\n{...},\n{...},\n...\n]
+    Skips the opening/closing brackets and strips trailing commas.
+    """
+    with open_file(path) as f:
+        for line_num, line in enumerate(f, 1):
+            stripped = line.strip()
+
+            # Skip empty lines, opening bracket, and closing bracket
+            if not stripped or stripped in ('[', ']'):
+                continue
+
+            # Apply line range filtering
+            if from_line and line_num < from_line:
+                continue
+            if to_line and line_num > to_line:
+                break
+
+            # Strip trailing comma if present (Wikidata JSON array format)
+            if stripped.endswith(','):
+                stripped = stripped[:-1]
+
+            # Skip if nothing left after stripping
+            if not stripped:
+                continue
+
+            try:
+                entity = json.loads(stripped)
+                yield (line_num, entity)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Skipping invalid JSON on line {line_num}: {e}")
 
 
 async def wait_for_api(api_url: str, timeout: int = API_READY_TIMEOUT) -> bool:
@@ -317,15 +360,16 @@ async def import_from_jsonl(
     log_file: Optional[str] = None,
     log_level: str = "INFO",
     from_line: Optional[int] = None,
-    to_line: Optional[int] = None
+    to_line: Optional[int] = None,
+    resume: bool = False
 ):
-    """Import entities from JSONL file.
+    """Import entities from JSONL or Wikidata JSON dump file.
 
     Args:
-        jsonl_path: Path to JSONL file
-        concurrency: Number of parallel imports (default: 10)
+        jsonl_path: Path to JSONL or Wikidata JSON dump file
+        concurrency: Number of parallel imports (default: 50)
         progress_interval: Show detailed progress every N batches (default: 10)
-        api_url: API base URL (default: http://localhost:8000/v1/entitybase)
+        api_url: API base URL (default: http://localhost:8083/v1/import)
         db_path: Path to SQLite state database (default: import_state.db)
         cleanup: Prompt to delete database after import completes
         auto_cleanup: Automatically delete database after import completes (no prompt)
@@ -333,7 +377,10 @@ async def import_from_jsonl(
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
         from_line: Start importing from line number (1-indexed)
         to_line: Stop importing at line number (1-indexed)
+        resume: Resume last interrupted run for this file
     """
+    from src.state_manager import ImportStateManager
+
     run_id_for_log = 0
 
     class RunIDFilter(logging.Filter):
@@ -394,45 +441,82 @@ async def import_from_jsonl(
         print(f"Waiting timed out after {API_READY_TIMEOUT}s")
         return
 
-    logger.info(f"Starting import from {jsonl_path}")
-    logger.info(f"Concurrency: {concurrency}")
-    logger.info(f"API URL: {api_url}")
-
-    from src.state_manager import ImportStateManager
-
-    print("\nParsing JSONL file...")
-    entities = []
-    with open(jsonl_path, 'r') as f:
-        for line_num, line in enumerate(f, 1):
-            if from_line and line_num < from_line:
-                continue
-            if to_line and line_num > to_line:
-                break
-            line = line.strip()
-            if not line:
-                continue
-            if line.endswith(','):
-                line = line[:-1]
-            entity = json.loads(line)
-            entities.append((line_num, entity))
-
-    print(f"Parsed {len(entities):,} entities from file")
-    if from_line or to_line:
-        print(f"Line range: {from_line or 1} - {to_line or 'end'}")
-
     state_manager = ImportStateManager(db_path)
-    run_id = state_manager.create_run(
-        jsonl_file=str(jsonl_path),
-        total_entities=len(entities),
-        concurrency=concurrency,
-        api_url=f"{api_url}"
-    )
-    print(f"Created run #{run_id}")
+    existing_run_id = None
+    skip_lines = set()
 
-    print("Loading entities into database...")
-    state_manager.add_entities(run_id, [e for _, e in entities])
+    # Handle --resume: find last incomplete run
+    if resume:
+        incomplete_run = state_manager.find_incomplete_run(str(jsonl_path))
+        if incomplete_run:
+            existing_run_id = incomplete_run.run_id
+            stats = state_manager.get_resume_stats(existing_run_id)
+            print(f"\nResuming run #{existing_run_id}")
+            print(f"  Success: {stats['success']:,}")
+            print(f"  Failed:  {stats['failed']:,}")
+            print(f"  Pending: {stats['pending']:,}")
+            print(f"  Total:   {stats['total']:,}")
 
-    tracker = ProgressTracker(total=len(entities))
+            # Reset processing entities back to pending
+            state_manager.reset_pending_to_failed(existing_run_id)
+
+            # Get line numbers already imported successfully
+            skip_lines = state_manager.get_imported_line_numbers(existing_run_id)
+            print(f"  Already imported: {len(skip_lines):,} entities")
+
+            run_id = existing_run_id
+        else:
+            print("No incomplete run found for this file. Starting fresh.")
+            resume = False
+
+    if not resume:
+        # First pass: count entities for progress tracking
+        print("\nCounting entities in file...")
+        entity_count = 0
+        for line_num, _ in iter_wikidata_json(jsonl_path, from_line, to_line):
+            entity_count += 1
+            if entity_count % 1_000_000 == 0:
+                print(f"  Counted {entity_count:,} entities...")
+
+        print(f"Found {entity_count:,} entities in file")
+        if from_line or to_line:
+            print(f"Line range: {from_line or 1} - {to_line or 'end'}")
+
+        run_id = state_manager.create_run(
+            jsonl_file=str(jsonl_path),
+            total_entities=entity_count,
+            concurrency=concurrency,
+            api_url=f"{api_url}"
+        )
+        run_id_for_log = run_id
+        print(f"Created run #{run_id}")
+
+    # Load entities into database in batches (skip already-imported if resuming)
+    print("\nLoading entities into database...")
+    batch_size = 10_000
+    batch = []
+    loaded_count = 0
+
+    for line_num, entity in iter_wikidata_json(jsonl_path, from_line, to_line):
+        if resume and line_num in skip_lines:
+            continue
+
+        batch.append((line_num, entity))
+        loaded_count += 1
+
+        if len(batch) >= batch_size:
+            state_manager.add_entities(run_id, batch)
+            print(f"  Loaded {loaded_count:,} entities...")
+            batch = []
+
+    # Load remaining entities
+    if batch:
+        state_manager.add_entities(run_id, batch)
+
+    print(f"Loaded {loaded_count:,} entities into database\n")
+
+    # Import loop with live progress
+    tracker = ProgressTracker(total=loaded_count)
     success_count = 0
     fail_count = 0
     skip_count = 0
@@ -487,14 +571,14 @@ async def import_from_jsonl(
     elapsed = tracker.elapsed_seconds
     elapsed_formatted = format_elapsed(elapsed)
     rate_per_sec = tracker.rate_per_second
-    print(f"\nTotal:        {len(entities):,}")
+    print(f"\nTotal:        {loaded_count:,}")
     print(f"Success:      {success_count:,}")
     print(f"Failed:       {fail_count:,}")
     print(f"Skipped:      {skip_count:,}")
     print(f"Speed:        {rate_per_sec:.1f} entities/second")
     print(f"Elapsed:      {elapsed_formatted}")
     print(f"Run ID:       {run_id}")
-    print("View stats:   python scripts/imports/cli.py status")
+    print("View stats:   python -m src.cli status")
     print(f"Database:      {db_path}")
     print("="*70)
 

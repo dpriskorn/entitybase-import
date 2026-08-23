@@ -276,7 +276,7 @@ def cmd_help(args):
 
 
 def cmd_import(args):
-    """Import entities from JSONL file."""
+    """Import entities from JSONL or Wikidata JSON dump file."""
     import asyncio
     import sys
     from pathlib import Path
@@ -296,7 +296,8 @@ def cmd_import(args):
         auto_cleanup=args.auto_cleanup,
         log_level=args.log_level,
         from_line=args.from_line,
-        to_line=args.to_line
+        to_line=args.to_line,
+        resume=args.resume
     ))
 
 
@@ -311,13 +312,24 @@ def cmd_download(args):
     download_cmd(args)
 
 
+def cmd_download_dump(args):
+    """Download a full Wikidata dump file."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    from src.download_wikidata_entities import download_dump  # type: ignore[import-not-found]
+
+    download_dump(args)
+
+
 def main():
     parser = argparse.ArgumentParser(description='EntityBase Import CLI')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
-    import_parser = subparsers.add_parser('import', help='Import entities from JSONL file into EntityBase')
-    import_parser.add_argument('jsonl_file', help='Path to JSONL file to import')
-    import_parser.add_argument('--concurrency', '-c', type=int, default=10, help='Number of parallel imports')
+    import_parser = subparsers.add_parser('import', help='Import entities from JSONL or Wikidata JSON dump file')
+    import_parser.add_argument('jsonl_file', help='Path to JSONL or Wikidata JSON dump file (.json or .json.gz)')
+    import_parser.add_argument('--concurrency', '-c', type=int, default=50, help='Number of parallel imports')
     import_parser.add_argument('--progress-interval', '-p', type=int, default=10, help='Show progress every N batches')
     import_parser.add_argument('--host', default='localhost', help='EntityBase API host')
     import_parser.add_argument('--port', type=int, default=8083, help='EntityBase API port')
@@ -328,6 +340,7 @@ def main():
     import_parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], help='Logging level')
     import_parser.add_argument('--from', dest='from_line', type=int, help='Start from line number (1-indexed)')
     import_parser.add_argument('--to', dest='to_line', type=int, help='Stop at line number (1-indexed)')
+    import_parser.add_argument('--resume', action='store_true', help='Resume last interrupted run for this file')
 
     download_parser = subparsers.add_parser('download', help='Download Wikidata entities to JSONL')
     download_parser.add_argument("entity_ids", nargs="*", help="Specific Wikidata entity IDs (e.g., Q42, P31, L42)")
@@ -338,6 +351,13 @@ def main():
     download_parser.add_argument("--append", "-a", action="store_true", help="Append to existing JSONL file")
     download_parser.add_argument("--seed", "-s", type=int, default=None, help="Random seed for reproducibility")
     download_parser.add_argument("--verbose", "-v", action="store_true", help="Print verbose output")
+
+    dump_parser = subparsers.add_parser('download-dump', help='Download a full Wikidata dump file (lexemes or items)')
+    dump_parser.add_argument("dump_type", choices=["lexemes", "items"], help="Type of dump to download")
+    dump_parser.add_argument("--output", "-o", type=Path, default=None, help="Output file path (default: data/<filename>)")
+    dump_parser.add_argument("--bz2", action="store_true", help="Download bz2 compressed instead of gz (smaller file)")
+    dump_parser.add_argument("--gz", action="store_true", default=True, help="Download gz compressed (default)")
+    dump_parser.add_argument("--force", "-f", action="store_true", help="Overwrite existing file without prompting")
 
     subparsers.add_parser('status', help='Show current import status')
 
@@ -371,6 +391,7 @@ def main():
         'help': cmd_help,
         'import': cmd_import,
         'download': cmd_download,
+        'download-dump': cmd_download_dump,
         'status': cmd_status,
         'list': cmd_list,
         'stats': cmd_stats,
