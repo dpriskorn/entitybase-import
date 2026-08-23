@@ -445,11 +445,31 @@ async def import_from_jsonl(
             print("  python -m src.cli download-dump items")
         return
 
+    print()
+    print("=" * 70)
+    print("IMPORT")
+    print("=" * 70)
+    print(f"File:        {jsonl_path.name}")
+    print(f"Concurrency: {concurrency}")
+    if from_line or to_line:
+        print(f"Line range:  {from_line or 1} - {to_line or 'end'}")
+    print()
+    print("Steps:")
+    print("  [1/4] Wait for API to be ready")
+    print("  [2/4] Count entities in file")
+    print("  [3/4] Load entities into database")
+    print("  [4/4] Import entities to API")
+    print()
+
+    # Step 1: Wait for API
+    print("[1/4] Waiting for API to be ready...")
     if not await wait_for_api(api_url):
         logger.error("API not available, aborting import")
-        print("\nERROR: EntityBase API is not responding. Please ensure the API is running.")
+        print("ERROR: EntityBase API is not responding.")
         print(f"Waiting timed out after {API_READY_TIMEOUT}s")
         return
+    print("[1/4] API is ready")
+    print()
 
     state_manager = ImportStateManager(db_path)
     existing_run_id = None
@@ -485,9 +505,9 @@ async def import_from_jsonl(
 
         if cached_count and not from_line and not to_line:
             entity_count = cached_count
-            print(f"\nUsing cached count: {entity_count:,} entities ({file_size:,} bytes)")
+            print(f"[2/4] Using cached count: {entity_count:,} entities ({file_size:,} bytes)")
         else:
-            print("\nCounting entities in file...")
+            print("[2/4] Counting entities in file...")
             entity_count = 0
             start_count = time.time()
             last_report = start_count
@@ -500,19 +520,22 @@ async def import_from_jsonl(
                     elapsed = now - start_count
                     rate = entity_count / elapsed if elapsed > 0 else 0
                     elapsed_str = format_elapsed(elapsed)
-                    print(f"  Counted {entity_count:>10,} entities | {rate:,.0f}/s | {elapsed_str}", end="\r")
+                    remaining = (9_000_000 - entity_count) / rate if rate > 0 else 0
+                    eta_str = format_elapsed(remaining) if remaining > 0 and entity_count < 9_000_000 else ""
+                    eta_display = f" | ETA: {eta_str}" if eta_str else ""
+                    print(f"  Counted {entity_count:>10,} entities | {rate:,.0f}/s | {elapsed_str}{eta_display}", end="\r")
                     last_report = now
 
             elapsed = time.time() - start_count
             elapsed_str = format_elapsed(elapsed)
-            print(f"  Counted {entity_count:>10,} entities | {elapsed_str}" + " " * 20)
+            print(f"  Counted {entity_count:>10,} entities | {elapsed_str}" + " " * 40)
 
             if not from_line and not to_line:
                 state_manager.store_count(str(jsonl_path), file_size, entity_count)
-                print(f"  Cached count for future imports")
+                print("  Cached count for future imports")
 
         if from_line or to_line:
-            print(f"Line range: {from_line or 1} - {to_line or 'end'}")
+            print(f"  Line range: {from_line or 1} - {to_line or 'end'}")
 
         run_id = state_manager.create_run(
             jsonl_file=str(jsonl_path),
@@ -521,13 +544,16 @@ async def import_from_jsonl(
             api_url=f"{api_url}"
         )
         run_id_for_log = run_id
-        print(f"Created run #{run_id}")
+        print(f"[2/4] Found {entity_count:,} entities (run #{run_id})")
+        print()
 
-    # Load entities into database in batches (skip already-imported if resuming)
-    print("\nLoading entities into database...")
+    # Step 3: Load entities into database
+    print("[3/4] Loading entities into database...")
     batch_size = 10_000
     batch = []
     loaded_count = 0
+    start_load = time.time()
+    last_report = start_load
 
     for line_num, entity in iter_wikidata_json(jsonl_path, from_line, to_line):
         if resume and line_num in skip_lines:
@@ -538,16 +564,25 @@ async def import_from_jsonl(
 
         if len(batch) >= batch_size:
             state_manager.add_entities(run_id, batch)
-            print(f"  Loaded {loaded_count:,} entities...")
+            now = time.time()
+            elapsed = now - start_load
+            rate = loaded_count / elapsed if elapsed > 0 else 0
+            remaining = (entity_count - loaded_count) / rate if rate > 0 else 0
+            elapsed_str = format_elapsed(elapsed)
+            eta_str = format_elapsed(remaining) if remaining > 0 else "N/A"
+            print(f"  Loaded {loaded_count:>10,} / {entity_count:,} | {rate:,.0f}/s | {elapsed_str} elapsed | ETA: {eta_str}", end="\r")
             batch = []
 
     # Load remaining entities
     if batch:
         state_manager.add_entities(run_id, batch)
 
-    print(f"Loaded {loaded_count:,} entities into database\n")
+    elapsed = time.time() - start_load
+    print(f"[3/4] Loaded {loaded_count:,} entities in {format_elapsed(elapsed)}" + " " * 40)
+    print()
 
-    # Import loop with live progress
+    # Step 4: Import entities to API
+    print("[4/4] Importing entities to API...")
     tracker = ProgressTracker(total=loaded_count)
     success_count = 0
     fail_count = 0
@@ -559,9 +594,10 @@ async def import_from_jsonl(
             batch = state_manager.get_next_batch(run_id, limit=concurrency)
 
             if not batch:
-                print("\n" + "="*70)
-                print("IMPORT COMPLETE")
-                print("="*70)
+                print()
+                print("=" * 70)
+                print("[4/4] IMPORT COMPLETE")
+                print("=" * 70)
                 break
 
             batch_num += 1
