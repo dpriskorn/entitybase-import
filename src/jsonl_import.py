@@ -499,6 +499,7 @@ async def import_from_jsonl(
             print(f"  Already imported: {len(skip_lines):,} entities")
 
             run_id = existing_run_id
+            entity_count = incomplete_run.total_entities
         else:
             print("No incomplete run found for this file. Starting fresh.")
             resume = False
