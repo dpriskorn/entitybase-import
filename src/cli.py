@@ -1,6 +1,7 @@
 """CLI interface for import state database."""
 
 import argparse
+import os
 import sqlite3
 from pathlib import Path
 
@@ -323,6 +324,9 @@ def cmd_download_dump(args):
 
 
 def main():
+    from dotenv import load_dotenv
+    load_dotenv()
+
     parser = argparse.ArgumentParser(description='EntityBase Import CLI')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
@@ -336,7 +340,7 @@ def main():
     import_parser.add_argument('--db-path', default='import_state.db', help='Path to SQLite state database')
     import_parser.add_argument('--cleanup', action='store_true', help='Prompt to delete database after import')
     import_parser.add_argument('--auto-cleanup', action='store_true', help='Automatically delete database after import')
-    import_parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], help='Logging level')
+    import_parser.add_argument('--log-level', default=os.environ.get('LOG_LEVEL', 'INFO'), choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], help='Logging level')
     import_parser.add_argument('--from', dest='from_line', type=int, help='Start from line number (1-indexed)')
     import_parser.add_argument('--to', dest='to_line', type=int, help='Stop at line number (1-indexed)')
     import_parser.add_argument('--resume', action='store_true', help='Resume last interrupted run for this file')
