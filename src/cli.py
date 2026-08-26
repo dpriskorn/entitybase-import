@@ -268,6 +268,17 @@ def cmd_runs(args):
               f"{row['total_entities']:<8} {row['success_count']:<6} {row['fail_count']:<6} {row['skip_count']:<6}")
 
 
+def cmd_dashboard(args):
+    """Start the import progress dashboard."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    from src.dashboard import run_dashboard  # type: ignore[import-not-found]
+
+    run_dashboard(db_path=args.db_path, host=args.host, port=args.port)
+
+
 def cmd_help(args):
     """Show help message."""
     import sys
@@ -382,6 +393,11 @@ def main():
     runs_parser = subparsers.add_parser('runs', help='List all import runs')
     runs_parser.add_argument('--limit', type=int, default=10, help='Max runs to show')
 
+    dashboard_parser = subparsers.add_parser('dashboard', help='Start import progress dashboard')
+    dashboard_parser.add_argument('--host', default='0.0.0.0', help='Dashboard host')
+    dashboard_parser.add_argument('--port', type=int, default=80, help='Dashboard port')
+    dashboard_parser.add_argument('--db-path', default='import_state.db', help='Path to SQLite state database')
+
     subparsers.add_parser('help', help='Show this help message')
 
     args = parser.parse_args()
@@ -400,7 +416,8 @@ def main():
         'stats': cmd_stats,
         'reset': cmd_reset,
         'export': cmd_export,
-        'runs': cmd_runs
+        'runs': cmd_runs,
+        'dashboard': cmd_dashboard
     }
 
     commands[args.command](args)

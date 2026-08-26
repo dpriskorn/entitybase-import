@@ -111,6 +111,10 @@ download-random-items count="100":
 import jsonl_file:
     poetry run python -m src.cli import {{jsonl_file}}
 
+# Start the import progress dashboard (port 80)
+dashboard:
+    poetry run python -m src.cli dashboard
+
 # Show MariaDB tuning recommendations
 mariadb-tuning:
     @echo "=== MariaDB Bulk Import Tuning ==="

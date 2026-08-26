@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EntityBase Import Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117; color: #c9d1d9;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 14px; padding: 24px; min-height: 100vh;
+  }
+  h1 { color: #58a6ff; font-size: 20px; margin-bottom: 20px; font-weight: 600; }
+  .status-badge {
+    display: inline-block; padding: 4px 12px; border-radius: 12px;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+  }
+  .status-active { background: #1a4731; color: #3fb950; border: 1px solid #238636; }
+  .status-idle { background: #1c1e24; color: #8b949e; border: 1px solid #30363d; }
+  .status-none { background: #1c1e24; color: #484f58; border: 1px solid #21262d; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 20px 0; }
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 16px;
+  }
+  .card-label { color: #8b949e; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .card-value { color: #e6edf3; font-size: 28px; font-weight: 700; }
+  .card-sub { color: #8b949e; font-size: 12px; margin-top: 4px; }
+  .progress-container {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 20px; margin: 20px 0;
+  }
+  .progress-bar-bg {
+    background: #21262d; border-radius: 6px; height: 24px; overflow: hidden; margin-top: 10px;
+  }
+  .progress-bar {
+    height: 100%; border-radius: 6px; transition: width 0.5s ease;
+    background: linear-gradient(90deg, #238636, #3fb950);
+  }
+  .progress-text {
+    display: flex; justify-content: space-between; margin-top: 8px;
+    color: #8b949e; font-size: 13px;
+  }
+  .file-info { color: #8b949e; font-size: 12px; margin-bottom: 20px; }
+  .file-info span { color: #c9d1d9; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  th { text-align: left; color: #8b949e; font-size: 11px; text-transform: uppercase;
+       letter-spacing: 1px; padding: 8px 12px; border-bottom: 1px solid #30363d; }
+  td { padding: 8px 12px; border-bottom: 1px solid #21262d; font-size: 13px; }
+  tr:hover td { background: #161b22; }
+  .pulse { animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .no-data { color: #484f58; text-align: center; padding: 60px 0; font-size: 16px; }
+</style>
+</head>
+<body>
+<h1>EntityBase Import Dashboard</h1>
+
+<div id="main">
+  <div class="no-data">Connecting...</div>
+</div>
+
+<script>
+function fmt(n) { return n == null ? '-' : n.toLocaleString(); }
+function fmtRate(r) {
+  if (r == null || r === 0) return '-';
+  if (r < 0.01) return '<0.01/s';
+  return r.toFixed(1) + '/s';
+}
+
+async function fetchStatus() {
+  try {
+    const r = await fetch('/api/status');
+    return await r.json();
+  } catch { return null; }
+}
+
+async function fetchRuns() {
+  try {
+    const r = await fetch('/api/runs');
+    return await r.json();
+  } catch { return []; }
+}
+
+function renderRun(run, label) {
+  if (!run) return '';
+  const badge = run.is_active
+    ? '<span class="status-badge status-active pulse">RUNNING</span>'
+    : '<span class="status-badge status-idle">COMPLETED</span>';
+
+  return `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      ${badge}
+      <span style="color:#8b949e;font-size:12px">${label || ''}</span>
+    </div>
+    <div class="file-info">
+      File: <span>${run.jsonl_file || '-'}</span> &nbsp;|&nbsp;
+      Concurrency: <span>${run.concurrency || '-'}</span> &nbsp;|&nbsp;
+      API: <span>${run.api_url || '-'}</span>
+    </div>
+    <div class="progress-container">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="color:#e6edf3;font-size:24px;font-weight:700">${run.percent.toFixed(1)}%</span>
+        <span style="color:#8b949e;font-size:13px">ETA: ${run.eta_formatted}</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar" style="width:${run.percent}%"></div>
+      </div>
+      <div class="progress-text">
+        <span>${fmt(run.processed)} / ${fmt(run.total)}</span>
+        <span>${run.elapsed_formatted}</span>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="card-label">Rate</div>
+        <div class="card-value">${fmtRate(run.rate_per_second)}</div>
+        <div class="card-sub">${fmt(Math.round(run.rate_per_hour))}/hour</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Success</div>
+        <div class="card-value" style="color:#3fb950">${fmt(run.success)}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Failed</div>
+        <div class="card-value" style="color:#f85149">${fmt(run.failed)}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Skipped</div>
+        <div class="card-value" style="color:#d29922">${fmt(run.skipped)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderRuns(runs) {
+  if (!runs.length) return '';
+  let rows = runs.map(r => `
+    <tr>
+      <td>${r.run_id}</td>
+      <td>${r.start_time ? r.start_time.slice(0,19) : '-'}</td>
+      <td>${r.end_time ? r.end_time.slice(0,19) : '<span class="pulse" style="color:#3fb950">RUNNING</span>'}</td>
+      <td>${r.jsonl_file ? r.jsonl_file.split('/').pop() : '-'}</td>
+      <td style="text-align:right">${fmt(r.total_entities)}</td>
+      <td style="text-align:right;color:#3fb950">${fmt(r.success_count)}</td>
+      <td style="text-align:right;color:#f85149">${fmt(r.fail_count)}</td>
+      <td style="text-align:right;color:#d29922">${fmt(r.skip_count)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <h2 style="color:#58a6ff;font-size:14px;margin:30px 0 10px;font-weight:600">Recent Runs</h2>
+    <table>
+      <thead><tr>
+        <th>ID</th><th>Started</th><th>Ended</th><th>File</th>
+        <th style="text-align:right">Total</th>
+        <th style="text-align:right">OK</th>
+        <th style="text-align:right">Fail</th>
+        <th style="text-align:right">Skip</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function update() {
+  const [status, runs] = await Promise.all([fetchStatus(), fetchRuns()]);
+  const el = document.getElementById('main');
+  if (!status) { el.innerHTML = '<div class="no-data">Cannot connect to server</div>'; return; }
+
+  let html = '';
+  if (status.active) {
+    html = renderRun(status.active, 'Active Import');
+  } else if (status.last) {
+    html = renderRun(status.last, 'Last Completed Import');
+  } else {
+    html = '<div class="status-badge status-none" style="margin-bottom:20px">NO IMPORT</div><div class="no-data">No import runs found</div>';
+  }
+  html += renderRuns(runs);
+  el.innerHTML = html;
+}
+
+update();
+setInterval(update, 1000);
+</script>
+</body>
+</html>
